@@ -42,7 +42,6 @@ RUN addgroup --gid 1000 siyuan && adduser --uid 1000 --ingroup siyuan --disabled
 ENV TZ=Asia/Shanghai
 ENV RUN_IN_CONTAINER=true
 EXPOSE 6806
-VOLUME /siyuan/workspace
 USER siyuan
 ENTRYPOINT ["/opt/siyuan/kernel"]
 
