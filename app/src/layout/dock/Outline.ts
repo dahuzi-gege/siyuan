@@ -11,11 +11,12 @@ import {openFileById} from "../../editor/util";
 import {Constants} from "../../constants";
 import {escapeHtml} from "../../util/escape";
 import {unicode2Emoji} from "../../emoji";
-import {onGet} from "../../protyle/util/onGet";
 import {getPreviousBlock} from "../../protyle/wysiwyg/getBlock";
 import {App} from "../../index";
 import {checkFold} from "../../util/noRelyPCFunction";
 import {transaction} from "../../protyle/wysiwyg/transaction";
+import {goHome} from "../../protyle/wysiwyg/commonHotkey";
+import {Editor} from "../../editor";
 
 export class Outline extends Model {
     public tree: Tree;
@@ -160,18 +161,14 @@ export class Outline extends Model {
             } else {
                 iconElement.classList.add("block__icon--active");
                 window.siyuan.storage[Constants.LOCAL_OUTLINE].keepExpand = true;
+                this.tree.expandAll();
             }
 
             setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
-            this.tree.expandAll();
         });
         options.tab.panelElement.addEventListener("click", (event: MouseEvent & { target: HTMLElement }) => {
-            if (this.type === "local") {
-                setPanelFocus(options.tab.panelElement.parentElement.parentElement);
-            } else {
-                setPanelFocus(options.tab.panelElement);
-            }
             let target = event.target as HTMLElement;
+            let isFocus = true;
             while (target && !target.isEqualNode(options.tab.panelElement)) {
                 if (target.classList.contains("block__icon")) {
                     const type = target.getAttribute("data-type");
@@ -182,48 +179,40 @@ export class Outline extends Model {
                     }
                     break;
                 } else if (target.isSameNode(this.headerElement.nextElementSibling) || target.classList.contains("block__icons")) {
-                    getAllModels().editor.find(item => {
-                        if (this.blockId === item.editor.protyle.block.rootID) {
-                            if (item.editor.protyle.scroll.element.classList.contains("fn__none")) {
-                                item.editor.protyle.contentElement.scrollTop = 0;
-                            } else {
-                                fetchPost("/api/filetree/getDoc", {
-                                    id: item.editor.protyle.block.rootID,
-                                    mode: 0,
-                                    size: window.siyuan.config.editor.dynamicLoadBlocks,
-                                }, getResponse => {
-                                    onGet({
-                                        data: getResponse,
-                                        protyle: item.editor.protyle,
-                                        action: [Constants.CB_GET_FOCUS],
-                                    });
-                                });
+                    openFileById({
+                        app: options.app,
+                        id: this.blockId,
+                        afterOpen: (model: Editor) => {
+                            if (model) {
+                                if (this.isPreview) {
+                                    model.editor.protyle.preview.element.querySelector(".b3-typography").scrollTop = 0;
+                                } else {
+                                    goHome(model.editor.protyle);
+                                }
                             }
-                            return true;
                         }
                     });
+                    isFocus = false;
                     break;
                 }
                 target = target.parentElement;
             }
+            if (isFocus) {
+                if (this.type === "local") {
+                    setPanelFocus(options.tab.panelElement.parentElement.parentElement);
+                } else {
+                    setPanelFocus(options.tab.panelElement);
+                }
+            }
         });
         this.bindSort();
-        if (this.isPreview) {
-            if (this.blockId) {
-                fetchPost("/api/export/preview", {
-                    id: this.blockId,
-                }, response => {
-                    response.data = response.data.outline;
-                    this.update(response);
-                });
-            }
-        } else {
-            fetchPost("/api/outline/getDocOutline", {
-                id: this.blockId,
-            }, response => {
-                this.update(response);
-            });
-        }
+
+        fetchPost("/api/outline/getDocOutline", {
+            id: this.blockId,
+            preview: this.isPreview
+        }, response => {
+            this.update(response);
+        });
     }
 
     private bindSort() {
@@ -244,7 +233,8 @@ export class Outline extends Model {
                 }
             });
             documentSelf.onmousemove = (moveEvent: MouseEvent) => {
-                if (!editor || editor.disabled || moveEvent.clientY === event.clientY && moveEvent.clientX === event.clientX) {
+                if (!editor || editor.disabled || Math.abs(moveEvent.clientY - event.clientY) < 3 &&
+                    Math.abs(moveEvent.clientX - event.clientX) < 3) {
                     return;
                 }
                 moveEvent.preventDefault();
@@ -287,6 +277,7 @@ export class Outline extends Model {
                 if (!selectItem) {
                     selectItem = this.element.querySelector(".dragover__top, .dragover__bottom, .dragover");
                 }
+                let hasChange = true;
                 if (selectItem && selectItem.className.indexOf("dragover") > -1 && editor) {
                     let previousID;
                     let parentID;
@@ -308,30 +299,37 @@ export class Outline extends Model {
                             previousID = selectItem.previousElementSibling?.getAttribute("data-node-id");
                         }
                         if (previousID === item.dataset.nodeId || parentID === item.dataset.nodeId) {
-                            return true;
+                            hasChange = false;
+                        } else {
+                            selectItem.before(item);
                         }
-                        selectItem.before(item);
                     } else if (selectItem.classList.contains("dragover__bottom")) {
                         previousID = selectItem.getAttribute("data-node-id");
-                        selectItem.after(item);
+                        if (previousID === item.previousElementSibling?.getAttribute("data-node-id")) {
+                            hasChange = false;
+                        } else {
+                            selectItem.after(item);
+                        }
                     }
-                    this.element.setAttribute("data-loading", "true");
-                    transaction(editor, [{
-                        action: "moveOutlineHeading",
-                        id: item.dataset.nodeId,
-                        previousID,
-                        parentID,
-                    }], [{
-                        action: "moveOutlineHeading",
-                        id: item.dataset.nodeId,
-                        previousID: undoPreviousID,
-                        parentID: undoParentID,
-                    }]);
-                    // https://github.com/siyuan-note/siyuan/issues/10828#issuecomment-2044099675
-                    editor.wysiwyg.element.querySelectorAll('[data-type="NodeHeading"] [contenteditable="true"][spellcheck]').forEach(item => {
-                        item.setAttribute("contenteditable", "false");
-                    });
-                    return true;
+                    if (hasChange) {
+                        this.element.setAttribute("data-loading", "true");
+                        transaction(editor, [{
+                            action: "moveOutlineHeading",
+                            id: item.dataset.nodeId,
+                            previousID,
+                            parentID,
+                        }], [{
+                            action: "moveOutlineHeading",
+                            id: item.dataset.nodeId,
+                            previousID: undoPreviousID,
+                            parentID: undoParentID,
+                        }]);
+                        // https://github.com/siyuan-note/siyuan/issues/10828#issuecomment-2044099675
+                        editor.wysiwyg.element.querySelectorAll('[data-type="NodeHeading"] [contenteditable="true"][spellcheck]').forEach(item => {
+                            item.setAttribute("contenteditable", "false");
+                        });
+                        return true;
+                    }
                 }
                 this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover").forEach(item => {
                     item.classList.remove("dragover__top", "dragover__bottom", "dragover");
@@ -361,29 +359,36 @@ export class Outline extends Model {
     }
 
     private onTransaction(data: IWebSocketData) {
-        if (this.isPreview || data.data.rootID !== this.blockId) {
+        if (data.data.rootID !== this.blockId) {
             return;
         }
         let needReload = false;
         const ops = data.data.sources[0];
-        ops.doOperations.forEach((item: IOperation) => {
-            if ((item.action === "update" || item.action === "insert") &&
-                (item.data.indexOf('data-type="NodeHeading"') > -1 || item.data.indexOf(`<div contenteditable="true" spellcheck="${window.siyuan.config.editor.spellcheck}"><wbr></div>`) > -1)) {
+        ops.doOperations.find((item: IOperation) => {
+            if (item.action === "update" &&
+                (this.element.querySelector(`.b3-list-item[data-node-id="${item.id}"]`) || item.data.indexOf('data-type="NodeHeading"') > -1)) {
                 needReload = true;
+                return true;
+            } else if (item.action === "insert" && item.data.indexOf('data-type="NodeHeading"') > -1) {
+                needReload = true;
+                return true;
             } else if (item.action === "delete" || item.action === "move") {
                 needReload = true;
+                return true;
             }
         });
-        if (ops.undoOperations) {
-            ops.undoOperations.forEach((item: IOperation) => {
+        if (!needReload && ops.undoOperations) {
+            ops.undoOperations.find((item: IOperation) => {
                 if (item.action === "update" && item.data.indexOf('data-type="NodeHeading"') > -1) {
                     needReload = true;
+                    return true;
                 }
             });
         }
         if (needReload) {
             fetchPost("/api/outline/getDocOutline", {
                 id: this.blockId,
+                preview: this.isPreview
             }, response => {
                 this.update(response);
                 // https://github.com/siyuan-note/siyuan/issues/8372

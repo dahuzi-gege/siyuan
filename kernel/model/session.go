@@ -47,7 +47,7 @@ func LogoutAuth(c *gin.Context) {
 
 	session := util.GetSession(c)
 	util.RemoveWorkspaceSession(session)
-	if err := session.Save(c); nil != err {
+	if err := session.Save(c); err != nil {
 		logging.LogErrorf("saves session failed: " + err.Error())
 		ret.Code = -1
 		ret.Msg = "save session failed"
@@ -102,7 +102,7 @@ func LoginAuth(c *gin.Context) {
 			ret.Code = 1 // 需要渲染验证码
 		}
 
-		if err := session.Save(c); nil != err {
+		if err := session.Save(c); err != nil {
 			logging.LogErrorf("save session failed: " + err.Error())
 			c.Status(http.StatusInternalServerError)
 			return
@@ -114,7 +114,7 @@ func LoginAuth(c *gin.Context) {
 	util.WrongAuthCount = 0
 	workspaceSession.Captcha = gulu.Rand.String(7)
 	logging.LogInfof("auth success [ip=%s]", util.GetRemoteAddr(c.Request))
-	if err := session.Save(c); nil != err {
+	if err := session.Save(c); err != nil {
 		logging.LogErrorf("save session failed: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		return
@@ -128,7 +128,7 @@ func GetCaptcha(c *gin.Context) {
 		options.CurveNumber = 0
 		options.BackgroundColor = color.White
 	})
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("generates captcha failed: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		return
@@ -137,13 +137,13 @@ func GetCaptcha(c *gin.Context) {
 	session := util.GetSession(c)
 	workspaceSession := util.GetWorkspaceSession(session)
 	workspaceSession.Captcha = img.Text
-	if err = session.Save(c); nil != err {
+	if err = session.Save(c); err != nil {
 		logging.LogErrorf("save session failed: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	if err = img.WriteImage(c.Writer); nil != err {
+	if err = img.WriteImage(c.Writer); err != nil {
 		logging.LogErrorf("writes captcha image failed: " + err.Error())
 		c.Status(http.StatusInternalServerError)
 		return
@@ -164,6 +164,16 @@ func CheckReadonly(c *gin.Context) {
 }
 
 func CheckAuth(c *gin.Context) {
+	// 已通过 JWT 认证
+	if role := GetGinContextRole(c); IsValidRole(role, []Role{
+		RoleAdministrator,
+		RoleEditor,
+		RoleReader,
+	}) {
+		c.Next()
+		return
+	}
+
 	//logging.LogInfof("check auth for [%s]", c.Request.RequestURI)
 	localhost := util.IsLocalHost(c.Request.RemoteAddr)
 
@@ -171,6 +181,7 @@ func CheckAuth(c *gin.Context) {
 	if "" == Conf.AccessAuthCode {
 		// Skip the empty access authorization code check https://github.com/siyuan-note/siyuan/issues/9709
 		if util.SiyuanAccessAuthCodeBypass {
+			c.Set(RoleContextKey, RoleAdministrator)
 			c.Next()
 			return
 		}
@@ -190,6 +201,7 @@ func CheckAuth(c *gin.Context) {
 			return
 		}
 
+		c.Set(RoleContextKey, RoleAdministrator)
 		c.Next()
 		return
 	}
@@ -205,20 +217,24 @@ func CheckAuth(c *gin.Context) {
 
 	// 放过来自本机的某些请求
 	if localhost {
-		if strings.HasPrefix(c.Request.RequestURI, "/assets/") {
+		if strings.HasPrefix(c.Request.RequestURI, "/assets/") || strings.HasPrefix(c.Request.RequestURI, "/export/") {
+			c.Set(RoleContextKey, RoleAdministrator)
 			c.Next()
 			return
 		}
 		if strings.HasPrefix(c.Request.RequestURI, "/api/system/exit") {
+			c.Set(RoleContextKey, RoleAdministrator)
 			c.Next()
 			return
 		}
 		if strings.HasPrefix(c.Request.RequestURI, "/api/system/getNetwork") {
+			c.Set(RoleContextKey, RoleAdministrator)
 			c.Next()
 			return
 		}
 		if strings.HasPrefix(c.Request.RequestURI, "/api/sync/performSync") {
 			if util.ContainerIOS == util.Container || util.ContainerAndroid == util.Container {
+				c.Set(RoleContextKey, RoleAdministrator)
 				c.Next()
 				return
 			}
@@ -229,8 +245,19 @@ func CheckAuth(c *gin.Context) {
 	session := util.GetSession(c)
 	workspaceSession := util.GetWorkspaceSession(session)
 	if workspaceSession.AccessAuthCode == Conf.AccessAuthCode {
+		c.Set(RoleContextKey, RoleAdministrator)
 		c.Next()
 		return
+	}
+
+	// 通过 BasicAuth (header: Authorization)
+	if username, password, ok := c.Request.BasicAuth(); ok {
+		// 使用访问授权码作为密码
+		if util.WorkspaceName == username && Conf.AccessAuthCode == password {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
 	}
 
 	// 通过 API token (header: Authorization)
@@ -248,6 +275,7 @@ func CheckAuth(c *gin.Context) {
 
 		if "" != token {
 			if Conf.Api.Token == token {
+				c.Set(RoleContextKey, RoleAdministrator)
 				c.Next()
 				return
 			}
@@ -261,6 +289,7 @@ func CheckAuth(c *gin.Context) {
 	// 通过 API token (query-params: token)
 	if token := c.Query("token"); "" != token {
 		if Conf.Api.Token == token {
+			c.Set(RoleContextKey, RoleAdministrator)
 			c.Next()
 			return
 		}
@@ -270,7 +299,15 @@ func CheckAuth(c *gin.Context) {
 		return
 	}
 
-	if "/check-auth" == c.Request.URL.Path { // 跳过访问授权页
+	// WebDAV BasicAuth Authenticate
+	if strings.HasPrefix(c.Request.RequestURI, "/webdav") {
+		c.Header("WWW-Authenticate", "Basic realm=Authorization Required")
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	// 跳过访问授权页
+	if "/check-auth" == c.Request.URL.Path {
 		c.Next()
 		return
 	}
@@ -300,7 +337,39 @@ func CheckAuth(c *gin.Context) {
 		return
 	}
 
+	c.Set(RoleContextKey, RoleAdministrator)
 	c.Next()
+}
+
+func CheckAdminRole(c *gin.Context) {
+	if IsAdminRoleContext(c) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
+}
+
+func CheckEditRole(c *gin.Context) {
+	if IsValidRole(GetGinContextRole(c), []Role{
+		RoleAdministrator,
+		RoleEditor,
+	}) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
+}
+
+func CheckReadRole(c *gin.Context) {
+	if IsValidRole(GetGinContextRole(c), []Role{
+		RoleAdministrator,
+		RoleEditor,
+		RoleReader,
+	}) {
+		c.Next()
+	} else {
+		c.AbortWithStatus(http.StatusForbidden)
+	}
 }
 
 var timingAPIs = map[string]int{
@@ -318,7 +387,7 @@ func Timing(c *gin.Context) {
 	timing := 15 * 1000
 	if timingEnv := os.Getenv("SIYUAN_PERFORMANCE_TIMING"); "" != timingEnv {
 		val, err := strconv.Atoi(timingEnv)
-		if nil == err {
+		if err == nil {
 			timing = val
 		}
 	}
@@ -333,11 +402,7 @@ func Timing(c *gin.Context) {
 }
 
 func Recover(c *gin.Context) {
-	defer func() {
-		logging.Recover()
-		c.Status(http.StatusInternalServerError)
-	}()
-
+	defer logging.Recover()
 	c.Next()
 }
 

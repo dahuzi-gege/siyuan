@@ -181,7 +181,7 @@ func (value *Value) String(format bool) string {
 
 func (value *Value) ToJSONString() string {
 	data, err := gulu.JSON.MarshalJSON(value)
-	if nil != err {
+	if err != nil {
 		return ""
 	}
 	return string(data)
@@ -189,11 +189,11 @@ func (value *Value) ToJSONString() string {
 
 func (value *Value) Clone() (ret *Value) {
 	data, err := gulu.JSON.MarshalJSON(value)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	err = gulu.JSON.UnmarshalJSON(data, &ret)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	return
@@ -498,7 +498,7 @@ func NewFormattedValueDate(content, content2 int64, format DateFormat, isNotTime
 			Content:          content,
 			Content2:         content2,
 			HasEndDate:       false,
-			IsNotTime:        true,
+			IsNotTime:        isNotTime,
 			FormattedContent: formatted,
 		}
 		return
@@ -535,7 +535,7 @@ func NewFormattedValueDate(content, content2 int64, format DateFormat, isNotTime
 		IsNotEmpty:       true,
 		IsNotEmpty2:      !content2Time.IsZero(),
 		HasEndDate:       hasEndDate,
-		IsNotTime:        true,
+		IsNotTime:        isNotTime,
 		FormattedContent: formatted,
 	}
 	return

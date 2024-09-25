@@ -32,6 +32,26 @@ var (
 	sessions = sync.Map{} // {appId, {sessionId, session}}
 )
 
+func BroadcastByTypeAndApp(typ, app, cmd string, code int, msg string, data interface{}) {
+	appSessions, ok := sessions.Load(app)
+	if !ok {
+		return
+	}
+
+	appSessions.(*sync.Map).Range(func(key, value interface{}) bool {
+		session := value.(*melody.Session)
+		if t, ok := session.Get("type"); ok && typ == t {
+			event := NewResult()
+			event.Cmd = cmd
+			event.Code = code
+			event.Msg = msg
+			event.Data = data
+			session.Write(event.Bytes())
+		}
+		return true
+	})
+}
+
 // BroadcastByType 广播所有实例上 typ 类型的会话。
 func BroadcastByType(typ, cmd string, code int, msg string, data interface{}) {
 	typeSessions := SessionsByType(typ)
@@ -220,10 +240,6 @@ func PushClearProgress() {
 	BroadcastByType("main", "cprogress", 0, "", nil)
 }
 
-func PushReloadAttrView(avID string) {
-	BroadcastByType("protyle", "refreshAttributeView", 0, "", map[string]interface{}{"id": avID})
-}
-
 func PushReloadDoc(rootID string) {
 	BroadcastByType("main", "reloaddoc", 0, "", rootID)
 }
@@ -238,12 +254,24 @@ func PushSaveDoc(rootID, typ string, sources interface{}) {
 	PushEvent(evt)
 }
 
-func PushProtyleReload(rootID string) {
+func PushReloadProtyle(rootID string) {
 	BroadcastByType("protyle", "reload", 0, "", rootID)
+}
+
+func PushSetRefDynamicText(rootID, blockID, defBlockID, refText string) {
+	BroadcastByType("main", "setRefDynamicText", 0, "", map[string]interface{}{"rootID": rootID, "blockID": blockID, "defBlockID": defBlockID, "refText": refText})
+}
+
+func PushSetDefRefCount(rootID, blockID string, refIDs []string, refCount, rootRefCount int) {
+	BroadcastByType("main", "setDefRefCount", 0, "", map[string]interface{}{"rootID": rootID, "blockID": blockID, "refCount": refCount, "rootRefCount": rootRefCount, "refIDs": refIDs})
 }
 
 func PushProtyleLoading(rootID, msg string) {
 	BroadcastByType("protyle", "addLoading", 0, msg, rootID)
+}
+
+func PushReloadEmojiConf() {
+	BroadcastByType("main", "reloadEmojiConf", 0, "", nil)
 }
 
 func PushDownloadProgress(id string, percent float32) {

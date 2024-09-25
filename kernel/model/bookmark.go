@@ -22,8 +22,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/88250/gulu"
 	"github.com/88250/lute/parse"
 	"github.com/siyuan-note/logging"
+	"github.com/siyuan-note/siyuan/kernel/av"
 	"github.com/siyuan-note/siyuan/kernel/cache"
 	"github.com/siyuan-note/siyuan/kernel/sql"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
@@ -64,7 +66,7 @@ func RemoveBookmark(bookmark string) (err error) {
 		}
 
 		util.PushEndlessProgress(fmt.Sprintf(Conf.Language(111), util.EscapeHTML(tree.Root.IALAttr("title"))))
-		if err = writeTreeUpsertQueue(tree); nil != err {
+		if err = writeTreeUpsertQueue(tree); err != nil {
 			util.ClearPushProgress(100)
 			return
 		}
@@ -122,7 +124,7 @@ func RenameBookmark(oldBookmark, newBookmark string) (err error) {
 		}
 
 		util.PushEndlessProgress(fmt.Sprintf(Conf.Language(111), util.EscapeHTML(tree.Root.IALAttr("title"))))
-		if err = writeTreeUpsertQueue(tree); nil != err {
+		if err = writeTreeUpsertQueue(tree); err != nil {
 			util.ClearPushProgress(100)
 			return
 		}
@@ -171,10 +173,14 @@ func BuildBookmark() (ret *Bookmarks) {
 		if "" != block.Name {
 			// Blocks in the bookmark panel display their name instead of content https://github.com/siyuan-note/siyuan/issues/8514
 			block.Content = block.Name
+		} else if "NodeAttributeView" == block.Type {
+			// Display database title in bookmark panel https://github.com/siyuan-note/siyuan/issues/11666
+			avID := gulu.Str.SubStringBetween(block.Markdown, "av-id=\"", "\"")
+			block.Content, _ = av.GetAttributeViewName(avID)
 		} else {
 			// Improve bookmark panel rendering https://github.com/siyuan-note/siyuan/issues/9361
 			tree, err := LoadTreeByBlockID(block.ID)
-			if nil != err {
+			if err != nil {
 				logging.LogErrorf("parse block [%s] failed: %s", block.ID, err)
 			} else {
 				n := treenode.GetNodeInTree(tree, block.ID)

@@ -214,6 +214,10 @@ declare class Lute {
 
     public SetSup(enable: boolean): void;
 
+    public SetInlineAsterisk(enable: boolean): void;
+
+    public SetInlineUnderscore(enable: boolean): void;
+
     public SetBlockRef(enable: boolean): void;
 
     public SetSanitize(enable: boolean): void;
@@ -232,7 +236,7 @@ declare class Lute {
 
     public SetFootnotes(enable: boolean): void;
 
-    public SetLinkRef(enalbe: boolean): void;
+    public SetLinkRef(enable: boolean): void;
 
     public SetEmojiSite(emojiSite: string): void;
 
@@ -366,6 +370,7 @@ interface IPreviewActionCustom {
 }
 
 interface IHintData {
+    id?: string;
     html: string;
     value: string;
     filter?: string[]

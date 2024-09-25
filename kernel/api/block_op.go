@@ -99,7 +99,7 @@ func appendDailyNoteBlock(c *gin.Context) {
 		luteEngine := util.NewLute()
 		var err error
 		data, err = dataBlockDOM(data, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "data block DOM failed: " + err.Error()
 			return
@@ -107,7 +107,7 @@ func appendDailyNoteBlock(c *gin.Context) {
 	}
 
 	p, _, err := model.CreateDailyNote(boxID)
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = "create daily note failed: " + err.Error()
 		return
@@ -119,6 +119,59 @@ func appendDailyNoteBlock(c *gin.Context) {
 			DoOperations: []*model.Operation{
 				{
 					Action:   "appendInsert",
+					Data:     data,
+					ParentID: parentID,
+				},
+			},
+		},
+	}
+
+	model.PerformTransactions(&transactions)
+	model.WaitForWritingFiles()
+
+	ret.Data = transactions
+	broadcastTransactions(transactions)
+}
+
+func prependDailyNoteBlock(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	data := arg["data"].(string)
+	dataType := arg["dataType"].(string)
+	boxID := arg["notebook"].(string)
+	if util.InvalidIDPattern(boxID, ret) {
+		return
+	}
+	if "markdown" == dataType {
+		luteEngine := util.NewLute()
+		var err error
+		data, err = dataBlockDOM(data, luteEngine)
+		if err != nil {
+			ret.Code = -1
+			ret.Msg = "data block DOM failed: " + err.Error()
+			return
+		}
+	}
+
+	p, _, err := model.CreateDailyNote(boxID)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = "create daily note failed: " + err.Error()
+		return
+	}
+
+	parentID := strings.TrimSuffix(path.Base(p), ".sy")
+	transactions := []*model.Transaction{
+		{
+			DoOperations: []*model.Operation{
+				{
+					Action:   "prependInsert",
 					Data:     data,
 					ParentID: parentID,
 				},
@@ -327,7 +380,7 @@ func appendBlock(c *gin.Context) {
 		luteEngine := util.NewLute()
 		var err error
 		data, err = dataBlockDOM(data, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "data block DOM failed: " + err.Error()
 			return
@@ -372,7 +425,7 @@ func prependBlock(c *gin.Context) {
 		luteEngine := util.NewLute()
 		var err error
 		data, err = dataBlockDOM(data, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "data block DOM failed: " + err.Error()
 			return
@@ -433,7 +486,7 @@ func insertBlock(c *gin.Context) {
 		luteEngine := util.NewLute()
 		var err error
 		data, err = dataBlockDOM(data, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "data block DOM failed: " + err.Error()
 			return
@@ -481,7 +534,7 @@ func updateBlock(c *gin.Context) {
 	if "markdown" == dataType {
 		var err error
 		data, err = dataBlockDOM(data, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "data block DOM failed: " + err.Error()
 			return
@@ -495,7 +548,7 @@ func updateBlock(c *gin.Context) {
 	}
 
 	block, err := model.GetBlock(id, nil)
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = "get block failed: " + err.Error()
 		return
@@ -504,7 +557,7 @@ func updateBlock(c *gin.Context) {
 	var transactions []*model.Transaction
 	if "NodeDocument" == block.Type {
 		oldTree, err := filesys.LoadTree(block.Box, block.Path, luteEngine)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = "load tree failed: " + err.Error()
 			return

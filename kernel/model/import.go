@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/siyuan-note/riff"
-	"github.com/siyuan-note/siyuan/kernel/av"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -48,18 +46,36 @@ import (
 	"github.com/88250/lute/render"
 	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
+	"github.com/siyuan-note/riff"
+	"github.com/siyuan-note/siyuan/kernel/av"
 	"github.com/siyuan-note/siyuan/kernel/filesys"
 	"github.com/siyuan-note/siyuan/kernel/sql"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
-func HTML2Markdown(htmlStr string) (markdown string, err error) {
+func HTML2Markdown(htmlStr string) (markdown string, withMath bool, err error) {
 	assetDirPath := filepath.Join(util.DataDir, "assets")
 	luteEngine := util.NewLute()
 	tree := luteEngine.HTML2Tree(htmlStr)
 	ast.Walk(tree.Root, func(n *ast.Node, entering bool) ast.WalkStatus {
-		if !entering || ast.NodeLinkDest != n.Type {
+		if !entering {
+			return ast.WalkContinue
+		}
+
+		if ast.NodeText == n.Type {
+			if n.ParentIs(ast.NodeTableCell) {
+				n.Tokens = bytes.ReplaceAll(n.Tokens, []byte("\\|"), []byte("|"))
+				n.Tokens = bytes.ReplaceAll(n.Tokens, []byte("|"), []byte("\\|"))
+			}
+		}
+
+		if ast.NodeInlineMath == n.Type {
+			withMath = true
+			return ast.WalkContinue
+		}
+
+		if ast.NodeLinkDest != n.Type {
 			return ast.WalkContinue
 		}
 
@@ -93,14 +109,14 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 	baseName = strings.TrimSuffix(baseName, ext)
 	unzipPath := filepath.Join(filepath.Dir(zipPath), baseName+"-"+gulu.Rand.String(7))
 	err = gulu.Zip.Unzip(zipPath, unzipPath)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	defer os.RemoveAll(unzipPath)
 
 	var syPaths []string
 	filelock.Walk(unzipPath, func(path string, info fs.FileInfo, err error) error {
-		if nil != err {
+		if err != nil {
 			return err
 		}
 
@@ -110,17 +126,19 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 		return nil
 	})
 
-	unzipRootPaths, err := filepath.Glob(unzipPath + "/*")
-	if nil != err {
+	entries, err := os.ReadDir(unzipPath)
+	if err != nil {
+		logging.LogErrorf("read unzip dir [%s] failed: %s", unzipPath, err)
 		return
 	}
-	if 1 != len(unzipRootPaths) {
-		logging.LogErrorf("invalid .sy.zip")
+	if 1 != len(entries) {
+		logging.LogErrorf("invalid .sy.zip [%v]", entries)
 		return errors.New(Conf.Language(199))
 	}
-	unzipRootPath := unzipRootPaths[0]
+	unzipRootPath := filepath.Join(unzipPath, entries[0].Name())
 	name := filepath.Base(unzipRootPath)
 	if strings.HasPrefix(name, "data-20") && len("data-20230321175442") == len(name) {
+		logging.LogErrorf("invalid .sy.zip [unzipRootPath=%s, baseName=%s]", unzipRootPath, name)
 		return errors.New(Conf.Language(199))
 	}
 
@@ -246,7 +264,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 				}
 			}
 
-			if err = os.Rename(oldPath, newPath); nil != err {
+			if err = os.Rename(oldPath, newPath); err != nil {
 				logging.LogErrorf("rename av file from [%s] to [%s] failed: %s", oldPath, newPath, err)
 				return
 			}
@@ -286,6 +304,32 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 			// 关联数据库和块
 			avNodes := tree.Root.ChildrenByType(ast.NodeAttributeView)
 			av.BatchUpsertBlockRel(avNodes)
+		}
+
+		// 如果数据库中绑定的块不在导入的文档中，则需要单独更新这些绑定块的属性
+		var attrViewIDs []string
+		for _, avID := range avIDs {
+			attrViewIDs = append(attrViewIDs, avID)
+		}
+		updateBoundBlockAvsAttribute(attrViewIDs)
+
+		// 插入关联关系 https://github.com/siyuan-note/siyuan/issues/11628
+		relationAvs := map[string]string{}
+		for _, avID := range avIDs {
+			attrView, _ := av.ParseAttributeView(avID)
+			if nil == attrView {
+				continue
+			}
+
+			for _, keyValues := range attrView.KeyValues {
+				if nil != keyValues.Key && av.KeyTypeRelation == keyValues.Key.Type && nil != keyValues.Key.Relation {
+					relationAvs[avID] = keyValues.Key.Relation.AvID
+				}
+			}
+		}
+
+		for srcAvID, destAvID := range relationAvs {
+			av.UpsertAvBackRel(srcAvID, destAvID)
 		}
 	}
 
@@ -337,18 +381,18 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 		if !util.UseSingleLineSave {
 			buf := bytes.Buffer{}
 			buf.Grow(1024 * 1024 * 2)
-			if err = json.Indent(&buf, data, "", "\t"); nil != err {
+			if err = json.Indent(&buf, data, "", "\t"); err != nil {
 				return
 			}
 			data = buf.Bytes()
 		}
 
-		if err = os.WriteFile(syPath, data, 0644); nil != err {
+		if err = os.WriteFile(syPath, data, 0644); err != nil {
 			logging.LogErrorf("write .sy [%s] failed: %s", syPath, err)
 			return
 		}
 		newSyPath := filepath.Join(filepath.Dir(syPath), tree.ID+".sy")
-		if err = filelock.Rename(syPath, newSyPath); nil != err {
+		if err = filelock.Rename(syPath, newSyPath); err != nil {
 			logging.LogErrorf("rename .sy from [%s] to [%s] failed: %s", syPath, newSyPath, err)
 			return
 		}
@@ -405,7 +449,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 	// 重命名文件路径
 	renamePaths := map[string]string{}
 	filelock.Walk(unzipRootPath, func(path string, info fs.FileInfo, err error) error {
-		if nil != err {
+		if err != nil {
 			return err
 		}
 
@@ -448,7 +492,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 	})
 	for i, oldPath := range oldPaths {
 		newPath := renamePaths[oldPath]
-		if err = filelock.Rename(oldPath, newPath); nil != err {
+		if err = filelock.Rename(oldPath, newPath); err != nil {
 			logging.LogErrorf("rename path from [%s] to [%s] failed: %s", oldPath, renamePaths[oldPath], err)
 			return errors.New("rename path failed")
 		}
@@ -488,7 +532,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 	dataAssets := filepath.Join(util.DataDir, "assets")
 	for _, assets := range assetsDirs {
 		if gulu.File.IsDir(assets) {
-			if err = filelock.Copy(assets, dataAssets); nil != err {
+			if err = filelock.Copy(assets, dataAssets); err != nil {
 				logging.LogErrorf("copy assets from [%s] to [%s] failed: %s", assets, dataAssets, err)
 				return
 			}
@@ -509,7 +553,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 	}
 
 	targetDir := filepath.Join(util.DataDir, boxID, baseTargetPath)
-	if err = os.MkdirAll(targetDir, 0755); nil != err {
+	if err = os.MkdirAll(targetDir, 0755); err != nil {
 		return
 	}
 
@@ -532,7 +576,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 		return nil
 	})
 
-	if err = filelock.Copy(unzipRootPath, targetDir); nil != err {
+	if err = filelock.Copy(unzipRootPath, targetDir); err != nil {
 		logging.LogErrorf("copy data dir from [%s] to [%s] failed: %s", unzipRootPath, util.DataDir, err)
 		err = errors.New("copy data failed")
 		return
@@ -544,7 +588,7 @@ func ImportSY(zipPath, boxID, toPath string) (err error) {
 		p := strings.TrimPrefix(absPath, boxAbsPath)
 		p = filepath.ToSlash(p)
 		tree, err := filesys.LoadTree(boxID, p, luteEngine)
-		if nil != err {
+		if err != nil {
 			logging.LogErrorf("load tree [%s] failed: %s", treePath, err)
 			continue
 		}
@@ -569,13 +613,13 @@ func ImportData(zipPath string) (err error) {
 	baseName = strings.TrimSuffix(baseName, ext)
 	unzipPath := filepath.Join(filepath.Dir(zipPath), baseName)
 	err = gulu.Zip.Unzip(zipPath, unzipPath)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	defer os.RemoveAll(unzipPath)
 
 	files, err := filepath.Glob(filepath.Join(unzipPath, "*/*.sy"))
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("check data.zip failed: %s", err)
 		return errors.New("check data.zip failed")
 	}
@@ -583,7 +627,7 @@ func ImportData(zipPath string) (err error) {
 		return errors.New(Conf.Language(198))
 	}
 	dirs, err := os.ReadDir(unzipPath)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("check data.zip failed: %s", err)
 		return errors.New("check data.zip failed")
 	}
@@ -592,7 +636,7 @@ func ImportData(zipPath string) (err error) {
 	}
 
 	tmpDataPath := filepath.Join(unzipPath, dirs[0].Name())
-	if err = filelock.Copy(tmpDataPath, util.DataDir); nil != err {
+	if err = filelock.Copy(tmpDataPath, util.DataDir); err != nil {
 		logging.LogErrorf("copy data dir from [%s] to [%s] failed: %s", tmpDataPath, util.DataDir, err)
 		err = errors.New("copy data failed")
 		return
@@ -636,7 +680,10 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 	}
 	boxLocalPath = filepath.Join(util.DataDir, boxID)
 
-	if gulu.File.IsDir(localPath) {
+	hPathsIDs := map[string]string{}
+	idPaths := map[string]string{}
+
+	if gulu.File.IsDir(localPath) { // 导入文件夹
 		// 收集所有资源文件
 		assets := map[string]string{}
 		filelock.Walk(localPath, func(currentPath string, info os.FileInfo, walkErr error) error {
@@ -695,6 +742,11 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 			targetPaths[curRelPath] = targetPath
 
 			if info.IsDir() {
+				if subMdFiles := util.GetFilePathsByExts(currentPath, []string{".md", ".markdown"}); 1 > len(subMdFiles) {
+					// 如果该文件夹中不包含 Markdown 文件则不处理 https://github.com/siyuan-note/siyuan/issues/11567
+					return nil
+				}
+
 				tree = treenode.NewTree(boxID, targetPath, hPath, title)
 				importTrees = append(importTrees, tree)
 				return nil
@@ -775,7 +827,7 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 						name = filepath.Base(fullPath)
 						name = util.AssetName(name)
 						assetTargetPath := filepath.Join(assetDirPath, name)
-						if err = filelock.Copy(fullPath, assetTargetPath); nil != err {
+						if err = filelock.Copy(fullPath, assetTargetPath); err != nil {
 							logging.LogErrorf("copy asset from [%s] to [%s] failed: %s", fullPath, assetTargetPath, err)
 							return ast.WalkContinue
 						}
@@ -794,6 +846,9 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 
 			reassignIDUpdated(tree)
 			importTrees = append(importTrees, tree)
+
+			hPathsIDs[tree.HPath] = tree.ID
+			idPaths[tree.ID] = tree.Path
 			return nil
 		})
 	} else { // 导入单个文件
@@ -809,7 +864,7 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 		targetPath = path.Join(targetPath, id+".sy")
 		var data []byte
 		data, err = os.ReadFile(localPath)
-		if nil != err {
+		if err != nil {
 			return err
 		}
 		tree := parseStdMd(data)
@@ -872,7 +927,7 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 				name := filepath.Base(absolutePath)
 				name = util.AssetName(name)
 				assetTargetPath := filepath.Join(assetDirPath, name)
-				if err = filelock.Copy(absolutePath, assetTargetPath); nil != err {
+				if err = filelock.Copy(absolutePath, assetTargetPath); err != nil {
 					logging.LogErrorf("copy asset from [%s] to [%s] failed: %s", absolutePath, assetTargetPath, err)
 					return ast.WalkContinue
 				}
@@ -904,6 +959,17 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 
 		importTrees = []*parse.Tree{}
 		searchLinks = map[string]string{}
+
+		// 按照路径排序 Improve sort when importing markdown files https://github.com/siyuan-note/siyuan/issues/11390
+		var paths, hPaths []string
+		for hPath := range hPathsIDs {
+			hPaths = append(hPaths, hPath)
+		}
+		sort.Strings(hPaths)
+		for _, hPath := range hPaths {
+			paths = append(paths, idPaths[hPathsIDs[hPath]])
+		}
+		ChangeFileTreeSort(boxID, paths)
 	}
 
 	IncSync()
@@ -913,11 +979,12 @@ func ImportFromLocalPath(boxID, localPath string, toPath string) (err error) {
 
 func parseStdMd(markdown []byte) (ret *parse.Tree) {
 	luteEngine := util.NewStdLute()
+	luteEngine.SetYamlFrontMatter(true) // 解析 YAML Front Matter https://github.com/siyuan-note/siyuan/issues/10878
 	ret = parse.Parse("", markdown, luteEngine.ParseOptions)
 	if nil == ret {
 		return
 	}
-	genTreeID(ret)
+	normalizeTree(ret)
 	imgHtmlBlock2InlineImg(ret)
 	parse.NestedInlines2FlattedSpansHybrid(ret, false)
 	return
@@ -987,7 +1054,7 @@ func processBase64Img(n *ast.Node, dest string, assetDirPath string, err error) 
 	tmpFile.Close()
 
 	assetTargetPath := filepath.Join(assetDirPath, name)
-	if err = filelock.Copy(tmp, assetTargetPath); nil != err {
+	if err = filelock.Copy(tmp, assetTargetPath); err != nil {
 		logging.LogErrorf("copy asset from [%s] to [%s] failed: %s", tmp, assetTargetPath, err)
 		return
 	}

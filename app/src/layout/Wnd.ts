@@ -3,8 +3,11 @@ import {genUUID} from "../util/genID";
 import {
     fixWndFlex1,
     getInstanceById,
-    getWndByLayout, JSONToCenter,
-    newModelByInitData, pdfIsLoading, saveLayout,
+    getWndByLayout,
+    JSONToCenter,
+    newModelByInitData,
+    pdfIsLoading,
+    saveLayout,
     setPanelFocus,
     switchWnd
 } from "./util";
@@ -12,10 +15,15 @@ import {Tab} from "./Tab";
 import {Model} from "./Model";
 import {Editor} from "../editor";
 import {Graph} from "./dock/Graph";
-import {hasClosestBlock, hasClosestByAttribute, hasClosestByClassName} from "../protyle/util/hasClosest";
+import {
+    hasClosestBlock,
+    hasClosestByAttribute,
+    hasClosestByClassName,
+    isInEmbedBlock
+} from "../protyle/util/hasClosest";
 import {Constants} from "../constants";
 /// #if !BROWSER
-import {webFrame, ipcRenderer} from "electron";
+import {ipcRenderer, webFrame} from "electron";
 import {setModelsHash, setTabPosition} from "../window/setHeader";
 /// #endif
 import {Search} from "../search";
@@ -67,7 +75,7 @@ export class Wnd {
         <ul class="fn__flex layout-tab-bar"></ul>
         <ul class="layout-tab-bar layout-tab-bar--readonly fn__flex-1">
             <li class="item item--readonly">
-                <span data-type="new" class="block__icon block__icon--show ariaLabel" aria-label="${window.siyuan.languages.newFile}"><svg><use xlink:href="#iconAdd"></use></svg></span>
+                <span data-type="new" class="block__icon block__icon--show ariaLabel${window.siyuan.config.readonly ? " fn__none" : ""}" aria-label="${window.siyuan.languages.newFile}"><svg><use xlink:href="#iconAdd"></use></svg></span>
                 <span class="fn__flex-1"></span>
                 <span data-type="more" data-menu="true" class="block__icon block__icon--show ariaLabel" aria-label="${window.siyuan.languages.switchTab}"><svg><use xlink:href="#iconDown"></use></svg></span>
             </li>
@@ -193,20 +201,29 @@ export class Wnd {
             }
         });
         let dragleaveTimeout: number;
+        let headerDragCounter = 0;
         this.headersElement.parentElement.addEventListener("dragleave", function () {
-            clearTimeout(dragleaveTimeout);
-            // 窗口拖拽到新窗口时，不 drop 无法移除 clone 的元素
-            dragleaveTimeout = window.setTimeout(() => {
-                document.querySelectorAll(".layout-tab-bar li[data-clone='true']").forEach(item => {
-                    item.remove();
-                });
-            }, 1000);
-            const it = this as HTMLElement;
-            it.classList.remove("layout-tab-bars--drag");
+            headerDragCounter--;
+            if (headerDragCounter === 0) {
+                clearTimeout(dragleaveTimeout);
+                // 窗口拖拽到新窗口时，不 drop 无法移除 clone 的元素
+                dragleaveTimeout = window.setTimeout(() => {
+                    document.querySelectorAll(".layout-tab-bar li[data-clone='true']").forEach(item => {
+                        item.remove();
+                    });
+                }, 1000);
+                const it = this as HTMLElement;
+                it.classList.remove("layout-tab-bars--drag");
+            }
+        });
+        this.headersElement.parentElement.addEventListener("dragenter", (event) => {
+            event.preventDefault();
+            headerDragCounter++;
         });
         this.headersElement.parentElement.addEventListener("drop", function (event: DragEvent & {
             target: HTMLElement
         }) {
+            headerDragCounter = 0;
             const it = this as HTMLElement;
             if (event.dataTransfer.types.includes(Constants.SIYUAN_DROP_FILE)) {
                 // 文档树拖拽
@@ -315,15 +332,13 @@ export class Wnd {
             const width = rect.width;
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
-            if ((x <= width / 3 && (y <= height / 8 || y >= height * 7 / 8)) ||
-                (x <= width / 8 && (y > height / 8 || y < height * 7 / 8))) {
+            if (x <= width / 8 || (x <= width / 3 && x > width / 8 && y >= height / 8 && y <= height * 7 / 8)) {
                 dragElement.setAttribute("style", "height:100%;width:50%;right:50%;bottom:0;left:0;top:0");
-            } else if ((x > width * 2 / 3 && (y <= height / 8 || y >= height * 7 / 8)) ||
-                (x >= width * 7 / 8 && (y > height / 8 || y < height * 7 / 8))) {
+            } else if (x >= width * 7 / 8 || (x >= width * 2 / 3 && x < width * 7 / 8 && y >= height / 8 && y <= height * 7 / 8)) {
                 dragElement.setAttribute("style", "height:100%;width:50%;right:0;bottom:0;left:50%;top:0");
-            } else if (x > width / 3 && x < width * 2 / 3 && y <= height / 8) {
+            } else if (y <= height / 8) {
                 dragElement.setAttribute("style", "height:50%;width:100%;right:0;bottom:50%;left:0;top:0");
-            } else if (x > width / 3 && x < width * 2 / 3 && y >= height * 7 / 8) {
+            } else if (y >= height * 7 / 8) {
                 dragElement.setAttribute("style", "height:50%;width:100%;right:0;bottom:0;left:0;top:50%");
             } else {
                 dragElement.setAttribute("style", "height:100%;width:100%;right:0;bottom:0;top:0;left:0");
@@ -462,7 +477,7 @@ export class Wnd {
                 // 在新页签中打开，但不跳转到新页签，但切换到新页签时需调整滚动
                 let nodeElement: HTMLElement;
                 Array.from(currentTab.model.editor.protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${keepCursorId}"]`)).find((item: HTMLElement) => {
-                    if (!hasClosestByAttribute(item, "data-type", "NodeBlockQueryEmbed", true)) {
+                    if (!isInEmbedBlock(item)) {
                         nodeElement = item;
                         return true;
                     }

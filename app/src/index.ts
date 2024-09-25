@@ -17,7 +17,7 @@ import {
     progressBackgroundTask,
     progressLoading,
     progressStatus,
-    reloadSync,
+    reloadSync, setDefRefCount, setRefDynamicText,
     setTitle,
     transactionError
 } from "./dialog/processSystem";
@@ -28,6 +28,7 @@ import {getSearch} from "./util/functions";
 import {hideAllElements} from "./protyle/ui/hideElements";
 import {loadPlugins, reloadPlugin} from "./plugin/loader";
 import "./assets/scss/base.scss";
+import {reloadEmoji} from "./emoji";
 
 export class App {
     public plugins: import("./plugin").Plugin[] = [];
@@ -60,14 +61,23 @@ export class App {
                     });
                     if (data) {
                         switch (data.cmd) {
+                            case "setDefRefCount":
+                                setDefRefCount(data.data);
+                                break;
+                            case "setRefDynamicText":
+                                setRefDynamicText(data.data);
+                                break;
                             case "reloadPlugin":
                                 reloadPlugin(this, data.data);
+                                break;
+                            case "reloadEmojiConf":
+                                reloadEmoji();
                                 break;
                             case "syncMergeResult":
                                 reloadSync(this, data.data);
                                 break;
                             case "reloaddoc":
-                                reloadSync(this, {upsertRootIDs: [data.data], removeRootIDs: []}, false);
+                                reloadSync(this, {upsertRootIDs: [data.data], removeRootIDs: []}, false, false);
                                 break;
                             case "readonly":
                                 window.siyuan.config.editor.readOnly = data.data;

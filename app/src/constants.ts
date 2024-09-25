@@ -65,6 +65,7 @@ export abstract class Constants {
     public static readonly CUSTOM_RIFF_DECKS: string = "custom-riff-decks";
 
     // size
+    public static readonly SIZE_DATABASE_MAZ_SIZE: number = 102400;
     public static readonly SIZE_SCROLL_TB: number = 24;
     public static readonly SIZE_SCROLL_STEP: number = 256;
     public static readonly SIZE_LINK_TEXT_MAX: number = 64;
@@ -93,7 +94,7 @@ export abstract class Constants {
     public static readonly CB_GET_ROOTSCROLL = "cb-get-rootscroll"; // 如果为 rootID 就滚动到指定位置，必有 rootID
     public static readonly CB_GET_HTML = "cb-get-html"; // 直接渲染，不需要再 /api/block/getDocInfo，否则搜索表格无法定位
     public static readonly CB_GET_HISTORY = "cb-get-history"; // 历史渲染
-    public static readonly CB_GET_OPENNEW = "cb-get-opennew"; // 编辑器只读后新建文件需为临时解锁状态
+    public static readonly CB_GET_OPENNEW = "cb-get-opennew"; // 编辑器只读后新建文件需为临时解锁状态 & https://github.com/siyuan-note/siyuan/issues/12197
 
     // localstorage
     public static readonly LOCAL_ZOOM = "local-zoom";
@@ -116,6 +117,7 @@ export abstract class Constants {
     public static readonly LOCAL_PLUGINTOPUNPIN = "local-plugintopunpin";
     public static readonly LOCAL_FLASHCARD = "local-flashcard";
     public static readonly LOCAL_FILEPOSITION = "local-fileposition";
+    public static readonly LOCAL_FILESPATHS = "local-filespaths";
     public static readonly LOCAL_DIALOGPOSITION = "local-dialogposition";
     public static readonly LOCAL_SESSION_FIRSTLOAD = "local-session-firstload";
     public static readonly LOCAL_OUTLINE = "local-outline";
@@ -191,7 +193,8 @@ export abstract class Constants {
         en_US: "20210808180117-6v0mkxr",
         fr_FR: "20210808180117-6v0mkxr",
         es_ES: "20210808180117-6v0mkxr",
-        ja_JP: "20210808180117-6v0mkxr",
+        ja_JP: "20240530133126-axarxgx",
+        it_IT: "20210808180117-6v0mkxr",
     };
     public static readonly QUICK_DECK_ID = "20230218211946-2kw8jgx";
 
@@ -349,25 +352,14 @@ export abstract class Constants {
             closeRight: {default: "", custom: ""},
             tabToWindow: {default: "", custom: ""},
             addToDatabase: {default: "", custom: ""},
+            unsplit: {default: "", custom: ""},
+            unsplitAll: {default: "", custom: ""},
         },
         editor: {
             general: {
                 duplicate: {default: "⌘D", custom: "⌘D"},
                 expandDown: {default: "⌥⇧↓", custom: "⌥⇧↓"},
                 expandUp: {default: "⌥⇧↑", custom: "⌥⇧↑"},
-                copyPlainText: {default: "", custom: ""},
-                copyID: {default: "", custom: ""},
-                copyProtocolInMd: {default: "", custom: ""},
-                netImg2LocalAsset: {default: "", custom: ""},
-                netAssets2LocalAssets: {default: "", custom: ""},
-                optimizeTypography: {default: "", custom: ""},
-                hLayout: {default: "", custom: ""},
-                vLayout: {default: "", custom: ""},
-                refPopover: {default: "", custom: ""},
-                copyText: {default: "", custom: ""},
-                exitFocus: {default: "", custom: ""},
-                ai: {default: "", custom: ""},
-                switchReadonly: {default: "", custom: ""},
                 expand: {default: "⌘↓", custom: "⌘↓"},
                 collapse: {default: "⌘↑", custom: "⌘↑"},
                 insertBottom: {default: "⌥⌘.", custom: "⌥⌘."},
@@ -404,7 +396,21 @@ export abstract class Constants {
                 jumpToParentPrev: {default: "⇧⌘M", custom: "⇧⌘M"},
                 jumpToParent: {default: "⇧⌘J", custom: "⇧⌘J"},
                 moveToUp: {default: "⇧⌘↑", custom: "⇧⌘↑"},
-                moveToDown: {default: "⇧⌘↓", custom: "⇧⌘↓"}
+                moveToDown: {default: "⇧⌘↓", custom: "⇧⌘↓"},
+                duplicateCompletely: {default: "", custom: ""},
+                copyPlainText: {default: "", custom: ""},
+                copyID: {default: "", custom: ""},
+                copyProtocolInMd: {default: "", custom: ""},
+                netImg2LocalAsset: {default: "", custom: ""},
+                netAssets2LocalAssets: {default: "", custom: ""},
+                optimizeTypography: {default: "", custom: ""},
+                hLayout: {default: "", custom: ""},
+                vLayout: {default: "", custom: ""},
+                refPopover: {default: "", custom: ""},
+                copyText: {default: "", custom: ""},
+                exitFocus: {default: "", custom: ""},
+                ai: {default: "", custom: ""},
+                switchReadonly: {default: "", custom: ""},
             },
             insert: {
                 appearance: {default: "⌥⌘X", custom: "⌥⌘X"},
@@ -424,8 +430,11 @@ export abstract class Constants {
                 "inline-code": {default: "⌘G", custom: "⌘G"},
                 link: {default: "⌘K", custom: "⌘K"},
                 check: {default: "⌘L", custom: "⌘L"},
+                "ordered-list": {default: "", custom: ""},
+                list: {default: "", custom: ""},
                 table: {default: "⌘O", custom: "⌘O"},
                 code: {default: "⇧⌘K", custom: "⇧⌘K"},
+                quote: {default: "", custom: ""},
                 clearInline: {default: "⌘\\", custom: "⌘\\"},
             },
             heading: {
@@ -606,6 +615,7 @@ export abstract class Constants {
         "strong": true,
         "inlineMath": false,
         "inlineMemo": true,
+        "blockRef": false,
         "kbd": true,
         "mark": true,
         "s": true,
@@ -633,7 +643,7 @@ export abstract class Constants {
 
     // assets
     public static readonly SIYUAN_ASSETS_IMAGE: string[] = [".apng", ".ico", ".cur", ".jpg", ".jpe", ".jpeg", ".jfif", ".pjp", ".pjpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif"];
-    public static readonly SIYUAN_ASSETS_AUDIO: string[] = [".mp3", ".wav", ".ogg", ".m4a"];
+    public static readonly SIYUAN_ASSETS_AUDIO: string[] = [".mp3", ".wav", ".ogg", ".m4a", ".aac"];
     public static readonly SIYUAN_ASSETS_VIDEO: string[] = [".mov", ".weba", ".mkv", ".mp4", ".webm"];
     public static readonly SIYUAN_ASSETS_EXTS: string[] = [".pdf"].concat(Constants.SIYUAN_ASSETS_IMAGE).concat(Constants.SIYUAN_ASSETS_AUDIO).concat(Constants.SIYUAN_ASSETS_VIDEO);
     public static readonly SIYUAN_ASSETS_SEARCH: string[] = [".txt", ".md", ".markdown", ".docx", ".xlsx", ".pptx", ".pdf", ".json", ".log", ".sql", ".html", ".xml", ".java", ".h", ".c",

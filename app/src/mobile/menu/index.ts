@@ -16,11 +16,11 @@ import {initAbout} from "../settings/about";
 import {getRecentDocs} from "./getRecentDocs";
 import {initEditor} from "../settings/editor";
 import {App} from "../../index";
-import {isHuawei, isInAndroid, isInIOS} from "../../protyle/util/compatibility";
+import {isHuawei, isInAndroid, isInIOS, isIPhone} from "../../protyle/util/compatibility";
 import {newFile} from "../../util/newFile";
 import {afterLoadPlugin} from "../../plugin/loader";
-import {Menu} from "../../plugin/Menu";
 import {commandPanel} from "../../boot/globalEvent/command/panel";
+import {openTopBarMenu} from "../../plugin/openTopBarMenu";
 
 export const popMenu = () => {
     activeBlur();
@@ -112,7 +112,7 @@ export const initRightMenu = (app: App) => {
         <svg class="b3-menu__icon"><use xlink:href="#iconPlugin"></use></svg><span class="b3-menu__label">${window.siyuan.languages.plugin}</span>
     </div>
     <div class="b3-menu__separator"></div>
-    <div class="b3-menu__item" id="menuHelp">
+    <div class="b3-menu__item${(isIPhone() || window.siyuan.config.readonly) ? " fn__none" : ""}" id="menuHelp">
         <svg class="b3-menu__icon"><use xlink:href="#iconHelp"></use></svg><span class="b3-menu__label">${window.siyuan.languages.userGuide}</span>
     </div>
     <a class="b3-menu__item" href="${"zh_CN" === window.siyuan.config.lang || "zh_CHT" === window.siyuan.config.lang ? "https://ld246.com/article/1649901726096" : "https://liuyun.io/article/1686530886208"}" target="_blank">
@@ -121,14 +121,8 @@ export const initRightMenu = (app: App) => {
     </a>
 </div>`;
     processSync();
-    const unPinsMenu: IMenu[] = [];
     app.plugins.forEach(item => {
-        const unPinMenu = afterLoadPlugin(item);
-        if (unPinMenu) {
-            unPinMenu.forEach(unpinItem => {
-                unPinsMenu.push(unpinItem);
-            });
-        }
+        afterLoadPlugin(item);
     });
     // 只能用 click，否则无法上下滚动 https://github.com/siyuan-note/siyuan/issues/6628
     menuElement.addEventListener("click", (event) => {
@@ -186,11 +180,7 @@ export const initRightMenu = (app: App) => {
                 event.stopPropagation();
                 break;
             } else if (target.id === "menuPlugin") {
-                const menu = new Menu();
-                unPinsMenu.forEach(item => {
-                    menu.addItem(item);
-                });
-                menu.fullscreen();
+                openTopBarMenu(app);
                 event.preventDefault();
                 event.stopPropagation();
                 break;

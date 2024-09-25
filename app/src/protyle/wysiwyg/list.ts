@@ -117,7 +117,7 @@ export const listIndent = (protyle: IProtyle, liItemElements: Element[], range: 
                 previousElement.lastElementChild.previousElementSibling.lastElementChild.before(item);
             } else if (subtype === "t") {
                 item.setAttribute("data-marker", "*");
-                actionElement.innerHTML = '<svg><use xlink:href="#iconUncheck"></use></svg>';
+                actionElement.innerHTML = `<svg><use xlink:href="#icon${item.classList.contains("protyle-task--done") ? "Check" : "Uncheck"}"></use></svg>`;
                 actionElement.classList.remove("protyle-action--order");
                 actionElement.classList.add("protyle-action--task");
                 previousElement.lastElementChild.previousElementSibling.lastElementChild.before(item);
@@ -542,6 +542,7 @@ export const listOutdent = (protyle: IProtyle, liItemElements: Element[], range:
             item.querySelector(".protyle-action").outerHTML = '<div class="protyle-action" draggable="true"><svg><use xlink:href="#iconDot"></use></svg></div>';
             item.setAttribute("data-subtype", "u");
             item.setAttribute("data-marker", "*");
+            item.classList.remove("protyle-task--done");
             doOperations.push({
                 action: "update",
                 id: itemId,
@@ -562,7 +563,7 @@ export const listOutdent = (protyle: IProtyle, liItemElements: Element[], range:
                 id: itemId,
                 data: item.outerHTML
             });
-        } else if ((item.getAttribute("data-subtype") === "u" || item.getAttribute("data-subtype") === "0") &&
+        } else if ((item.getAttribute("data-subtype") === "u" || item.getAttribute("data-subtype") === "o") &&
             parentLiItemElement.getAttribute("data-subtype") === "t") {
             undoOperations.push({
                 action: "update",

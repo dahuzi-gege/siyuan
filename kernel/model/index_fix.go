@@ -24,7 +24,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/88250/gulu"
@@ -42,39 +41,35 @@ import (
 )
 
 var (
-	checkIndexPerformed = atomic.Bool{}
+	checkIndexOnce = sync.Once{}
 )
 
 // checkIndex 自动校验数据库索引，仅在数据同步执行完成后执行一次。
 func checkIndex() {
-	if checkIndexPerformed.Load() {
-		return
-	}
+	checkIndexOnce.Do(func() {
+		logging.LogInfof("start checking index...")
 
-	logging.LogInfof("start checking index...")
+		task.AppendTask(task.DatabaseIndexFix, removeDuplicateDatabaseIndex)
+		sql.WaitForWritingDatabase()
 
-	task.AppendTask(task.DatabaseIndexFix, removeDuplicateDatabaseIndex)
-	sql.WaitForWritingDatabase()
+		task.AppendTask(task.DatabaseIndexFix, resetDuplicateBlocksOnFileSys)
 
-	task.AppendTask(task.DatabaseIndexFix, resetDuplicateBlocksOnFileSys)
+		task.AppendTask(task.DatabaseIndexFix, fixBlockTreeByFileSys)
+		sql.WaitForWritingDatabase()
 
-	task.AppendTask(task.DatabaseIndexFix, fixBlockTreeByFileSys)
-	sql.WaitForWritingDatabase()
+		task.AppendTask(task.DatabaseIndexFix, fixDatabaseIndexByBlockTree)
+		sql.WaitForWritingDatabase()
 
-	task.AppendTask(task.DatabaseIndexFix, fixDatabaseIndexByBlockTree)
-	sql.WaitForWritingDatabase()
+		task.AppendTask(task.DatabaseIndexFix, removeDuplicateDatabaseRefs)
 
-	task.AppendTask(task.DatabaseIndexFix, removeDuplicateDatabaseRefs)
+		// 后面要加任务的话记得修改推送任务栏的进度 util.PushStatusBar(fmt.Sprintf(Conf.Language(58), 1, 5))
 
-	// 后面要加任务的话记得修改推送任务栏的进度 util.PushStatusBar(fmt.Sprintf(Conf.Language(58), 1, 5))
-
-	task.AppendTask(task.DatabaseIndexFix, func() {
-		util.PushStatusBar(Conf.Language(185))
+		task.AppendTask(task.DatabaseIndexFix, func() {
+			util.PushStatusBar(Conf.Language(185))
+		})
+		debug.FreeOSMemory()
+		logging.LogInfof("finish checking index")
 	})
-	debug.FreeOSMemory()
-	logging.LogInfof("finish checking index")
-
-	checkIndexPerformed.Store(true)
 }
 
 var autoFixLock = sync.Mutex{}
@@ -261,10 +256,7 @@ func resetDuplicateBlocksOnFileSys() {
 
 	if needRefreshUI {
 		util.ReloadUI()
-		go func() {
-			time.Sleep(time.Second * 3)
-			util.PushMsg(Conf.Language(190), 5000)
-		}()
+		task.AppendAsyncTaskWithDelay(task.PushMsg, 3*time.Second, util.PushMsg, Conf.Language(190), 5000)
 	}
 }
 
@@ -273,8 +265,8 @@ func recreateTree(tree *parse.Tree, absPath string) {
 	treenode.RemoveBlockTreesByPathPrefix(strings.TrimSuffix(tree.Path, ".sy"))
 	treenode.RemoveBlockTreesByRootID(tree.ID)
 
-	resetTree(tree, "")
-	if err := filesys.WriteTree(tree); nil != err {
+	resetTree(tree, "", true)
+	if err := filesys.WriteTree(tree); err != nil {
 		logging.LogWarnf("write tree [%s] failed: %s", tree.Path, err)
 		return
 	}
@@ -289,7 +281,7 @@ func recreateTree(tree *parse.Tree, absPath string) {
 		}
 	}
 
-	if err := filelock.Remove(absPath); nil != err {
+	if err := filelock.Remove(absPath); err != nil {
 		logging.LogWarnf("remove [%s] failed: %s", absPath, err)
 		return
 	}
@@ -374,7 +366,7 @@ func fixDatabaseIndexByBlockTree() {
 	util.PushStatusBar(fmt.Sprintf(Conf.Language(58), 4, 5))
 	rootUpdatedMap := treenode.GetRootUpdated()
 	dbRootUpdatedMap, err := sql.GetRootUpdated()
-	if nil == err {
+	if err == nil {
 		reindexTreeByUpdated(rootUpdatedMap, dbRootUpdatedMap)
 	}
 }
@@ -450,7 +442,7 @@ func reindexTreeByUpdated(rootUpdatedMap, dbRootUpdatedMap map[string]string) {
 
 func reindexTreeByPath(box, p string, i, size int, luteEngine *lute.Lute) {
 	tree, err := filesys.LoadTree(box, p, luteEngine)
-	if nil != err {
+	if err != nil {
 		return
 	}
 
@@ -465,7 +457,7 @@ func reindexTree(rootID string, i, size int, luteEngine *lute.Lute) {
 	}
 
 	tree, err := filesys.LoadTree(root.BoxID, root.Path, luteEngine)
-	if nil != err {
+	if err != nil {
 		if os.IsNotExist(err) {
 			// 文件系统上没有找到该 .sy 文件，则订正块树
 			treenode.RemoveBlockTreesByRootID(rootID)
@@ -483,7 +475,7 @@ func reindexTree0(tree *parse.Tree, i, size int) {
 		tree.Root.SetIALAttr("updated", updated)
 		indexWriteTreeUpsertQueue(tree)
 	} else {
-		treenode.IndexBlockTree(tree)
+		treenode.UpsertBlockTree(tree)
 		sql.IndexTreeQueue(tree)
 	}
 

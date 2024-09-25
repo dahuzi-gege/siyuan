@@ -17,6 +17,7 @@
 package model
 
 import (
+	"github.com/88250/lute/html"
 	"time"
 
 	"github.com/88250/lute/ast"
@@ -32,7 +33,7 @@ func (tx *Transaction) doMoveOutlineHeading(operation *Operation) (ret *TxErr) {
 	parentID := operation.ParentID
 
 	tree, err := tx.loadTree(headingID)
-	if nil != err {
+	if err != nil {
 		return &TxErr{code: TxErrCodeBlockNotFound, id: headingID}
 	}
 	operation.RetData = tree.Root.ID
@@ -70,7 +71,7 @@ func (tx *Transaction) doMoveOutlineHeading(operation *Operation) (ret *TxErr) {
 
 		if ast.NodeDocument != previousHeading.Parent.Type {
 			// 仅支持文档根节点下第一层标题，不支持容器块内标题
-			util.PushMsg(Conf.language(240), 5000)
+			util.PushMsg(Conf.language(248), 5000)
 			return
 		}
 
@@ -119,7 +120,7 @@ func (tx *Transaction) doMoveOutlineHeading(operation *Operation) (ret *TxErr) {
 
 		if ast.NodeDocument != parentHeading.Parent.Type {
 			// 仅支持文档根节点下第一层标题，不支持容器块内标题
-			util.PushMsg(Conf.language(240), 5000)
+			util.PushMsg(Conf.language(248), 5000)
 			return
 		}
 
@@ -201,13 +202,13 @@ func (tx *Transaction) doMoveOutlineHeading(operation *Operation) (ret *TxErr) {
 		}
 	}
 
-	if err = tx.writeTree(tree); nil != err {
+	if err = tx.writeTree(tree); err != nil {
 		return
 	}
 	return
 }
 
-func Outline(rootID string) (ret []*Path, err error) {
+func Outline(rootID string, preview bool) (ret []*Path, err error) {
 	time.Sleep(util.FrontendQueueInterval)
 	WaitForWritingFiles()
 
@@ -215,6 +216,24 @@ func Outline(rootID string) (ret []*Path, err error) {
 	tree, _ := LoadTreeByBlockID(rootID)
 	if nil == tree {
 		return
+	}
+
+	if preview && Conf.Export.AddTitle {
+		if root, _ := getBlock(tree.ID, tree); nil != root {
+			root.IAL["type"] = "doc"
+			title := &ast.Node{ID: root.ID, Type: ast.NodeHeading, HeadingLevel: 1}
+			for k, v := range root.IAL {
+				if "type" == k {
+					continue
+				}
+				title.SetIALAttr(k, v)
+			}
+			title.InsertAfter(&ast.Node{Type: ast.NodeKramdownBlockIAL, Tokens: parse.IAL2Tokens(title.KramdownIAL)})
+
+			content := html.UnescapeString(root.Content)
+			title.AppendChild(&ast.Node{Type: ast.NodeText, Tokens: []byte(content)})
+			tree.Root.PrependChild(title)
+		}
 	}
 
 	ret = outline(tree)

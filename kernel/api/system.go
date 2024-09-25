@@ -17,13 +17,14 @@
 package api
 
 import (
-	"github.com/88250/lute"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/88250/lute"
 
 	"github.com/88250/gulu"
 	"github.com/gin-gonic/gin"
@@ -38,7 +39,7 @@ func getNetwork(c *gin.Context) {
 	defer c.JSON(http.StatusOK, ret)
 
 	maskedConf, err := model.GetMaskedConf()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = "get conf failed: " + err.Error()
 		return
@@ -75,7 +76,7 @@ func getChangelog(c *gin.Context) {
 	}
 
 	contentData, err := os.ReadFile(changelogPath)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("read changelog failed: %s", err)
 		return
 	}
@@ -96,7 +97,7 @@ func getEmojiConf(c *gin.Context) {
 
 	builtConfPath := filepath.Join(util.AppearancePath, "emojis", "conf.json")
 	data, err := os.ReadFile(builtConfPath)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("read emojis conf.json failed: %s", err)
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -104,7 +105,7 @@ func getEmojiConf(c *gin.Context) {
 	}
 
 	var conf []map[string]interface{}
-	if err = gulu.JSON.UnmarshalJSON(data, &conf); nil != err {
+	if err = gulu.JSON.UnmarshalJSON(data, &conf); err != nil {
 		logging.LogErrorf("unmarshal emojis conf.json failed: %s", err)
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -116,13 +117,14 @@ func getEmojiConf(c *gin.Context) {
 		"id":          "custom",
 		"title":       "Custom",
 		"title_zh_cn": "自定义",
+		"title_ja_jp": "カスタム",
 	}
 	items := []map[string]interface{}{}
 	custom["items"] = items
 	if gulu.File.IsDir(customConfDir) {
 		model.CustomEmojis = sync.Map{}
 		customEmojis, err := os.ReadDir(customConfDir)
-		if nil != err {
+		if err != nil {
 			logging.LogErrorf("read custom emojis failed: %s", err)
 		} else {
 			for _, customEmoji := range customEmojis {
@@ -134,7 +136,7 @@ func getEmojiConf(c *gin.Context) {
 				if customEmoji.IsDir() {
 					// 子级
 					subCustomEmojis, err := os.ReadDir(filepath.Join(customConfDir, name))
-					if nil != err {
+					if err != nil {
 						logging.LogErrorf("read custom emojis failed: %s", err)
 						continue
 					}
@@ -172,6 +174,7 @@ func addCustomEmoji(name string, items *[]map[string]interface{}) {
 		"unicode":           name,
 		"description":       nameWithoutExt,
 		"description_zh_cn": nameWithoutExt,
+		"description_ja_jp": nameWithoutExt,
 		"keywords":          nameWithoutExt,
 	}
 	*items = append(*items, emoji)
@@ -208,7 +211,7 @@ func getConf(c *gin.Context) {
 	defer c.JSON(http.StatusOK, ret)
 
 	maskedConf, err := model.GetMaskedConf()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = "get conf failed: " + err.Error()
 		return
@@ -216,6 +219,17 @@ func getConf(c *gin.Context) {
 
 	if !maskedConf.Sync.Enabled || (0 == maskedConf.Sync.Provider && !model.IsSubscriber()) {
 		maskedConf.Sync.Stat = model.Conf.Language(53)
+	}
+
+	// REF: https://github.com/siyuan-note/siyuan/issues/11364
+	role := model.GetGinContextRole(c)
+	if model.IsReadOnlyRole(role) {
+		maskedConf.ReadOnly = true
+	}
+	if !model.IsValidRole(role, []model.Role{
+		model.RoleAdministrator,
+	}) {
+		model.HideConfSecret(maskedConf)
 	}
 
 	ret.Data = map[string]interface{}{
@@ -238,14 +252,14 @@ func setUILayout(c *gin.Context) {
 	}
 
 	param, err := gulu.JSON.MarshalJSON(arg["layout"])
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
 	}
 
 	uiLayout := &conf.UILayout{}
-	if err = gulu.JSON.UnmarshalJSON(param, uiLayout); nil != err {
+	if err = gulu.JSON.UnmarshalJSON(param, uiLayout); err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return

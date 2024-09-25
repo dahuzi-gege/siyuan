@@ -40,7 +40,7 @@ func performTransactions(c *gin.Context) {
 
 	trans := arg["transactions"]
 	data, err := gulu.JSON.MarshalJSON(trans)
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = "parses request failed"
 		return
@@ -55,7 +55,7 @@ func performTransactions(c *gin.Context) {
 
 	timestamp := int64(arg["reqId"].(float64))
 	var transactions []*model.Transaction
-	if err = gulu.JSON.UnmarshalJSON(data, &transactions); nil != err {
+	if err = gulu.JSON.UnmarshalJSON(data, &transactions); err != nil {
 		ret.Code = -1
 		ret.Msg = "parses request failed"
 		return
@@ -72,11 +72,9 @@ func performTransactions(c *gin.Context) {
 	session := arg["session"].(string)
 	pushTransactions(app, session, transactions)
 
-	if model.IsFoldHeading(&transactions) || model.IsUnfoldHeading(&transactions) || model.IsMoveOutlineHeading(&transactions) {
-		if model.IsMoveOutlineHeading(&transactions) {
-			if retData := transactions[0].DoOperations[0].RetData; nil != retData {
-				util.PushReloadDoc(retData.(string))
-			}
+	if model.IsMoveOutlineHeading(&transactions) {
+		if retData := transactions[0].DoOperations[0].RetData; nil != retData {
+			util.PushReloadDoc(retData.(string))
 		}
 	}
 

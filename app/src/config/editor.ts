@@ -165,7 +165,7 @@ export const editor = {
         <div class="b3-label__text">${window.siyuan.languages.dynamicLoadBlocksTip}</div>
     </div>
     <span class="fn__space"></span>
-    <input class="b3-text-field fn__flex-center fn__size200" id="dynamicLoadBlocks" type="number" min="48" max="1024" value="${window.siyuan.config.editor.dynamicLoadBlocks}"/>
+    <input class="b3-text-field fn__flex-center fn__size200" id="dynamicLoadBlocks" type="number" min="48" value="${window.siyuan.config.editor.dynamicLoadBlocks}"/>
 </div>
 <div class="fn__flex b3-label config__item">
     <div class="fn__flex-1">
@@ -274,6 +274,22 @@ export const editor = {
 </label>
 <label class="fn__flex b3-label">
     <div class="fn__flex-1">
+        ${window.siyuan.languages.editorMarkdownInlineAsterisk}
+        <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineAsteriskTip}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="editorMarkdownInlineAsterisk" type="checkbox"${window.siyuan.config.editor.markdown.inlineAsterisk ? " checked" : ""}/>
+</label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
+        ${window.siyuan.languages.editorMarkdownInlineUnderscore}
+        <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineUnderscoreTip}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="editorMarkdownInlineUnderscore" type="checkbox"${window.siyuan.config.editor.markdown.inlineUnderscore ? " checked" : ""}/>
+</label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
         ${window.siyuan.languages.editorMarkdownInlineSup}
         <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineSupTip}</div>
     </div>
@@ -328,21 +344,17 @@ export const editor = {
                 dynamicLoadBlocks = 48;
                 (editor.element.querySelector("#dynamicLoadBlocks") as HTMLInputElement).value = "48";
             }
-            if (1024 < dynamicLoadBlocks) {
-                dynamicLoadBlocks = 1024;
-                (editor.element.querySelector("#dynamicLoadBlocks") as HTMLInputElement).value = "1024";
-            }
-
-            const markdown = {
-                inlineSup: (editor.element.querySelector("#editorMarkdownInlineSup") as HTMLInputElement).checked,
-                inlineSub: (editor.element.querySelector("#editorMarkdownInlineSub") as HTMLInputElement).checked,
-                inlineTag: (editor.element.querySelector("#editorMarkdownInlineTag") as HTMLInputElement).checked,
-                inlineMath: (editor.element.querySelector("#editorMarkdownInlineMath") as HTMLInputElement).checked
-            };
 
             fetchPost("/api/setting/setEditor", {
                 fullWidth: (editor.element.querySelector("#fullWidth") as HTMLInputElement).checked,
-                markdown: markdown,
+                markdown: {
+                    inlineAsterisk: (editor.element.querySelector("#editorMarkdownInlineAsterisk") as HTMLInputElement).checked,
+                    inlineUnderscore: (editor.element.querySelector("#editorMarkdownInlineUnderscore") as HTMLInputElement).checked,
+                    inlineSup: (editor.element.querySelector("#editorMarkdownInlineSup") as HTMLInputElement).checked,
+                    inlineSub: (editor.element.querySelector("#editorMarkdownInlineSub") as HTMLInputElement).checked,
+                    inlineTag: (editor.element.querySelector("#editorMarkdownInlineTag") as HTMLInputElement).checked,
+                    inlineMath: (editor.element.querySelector("#editorMarkdownInlineMath") as HTMLInputElement).checked
+                },
                 allowHTMLBLockScript: (editor.element.querySelector("#allowHTMLBLockScript") as HTMLInputElement).checked,
                 justify: (editor.element.querySelector("#justify") as HTMLInputElement).checked,
                 rtl: (editor.element.querySelector("#rtl") as HTMLInputElement).checked,

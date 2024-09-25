@@ -6,6 +6,12 @@ import {isMac} from "../util/compatibility";
 import {setInlineStyle} from "../../util/assets";
 import {fetchPost} from "../../util/fetch";
 import {lineNumberRender} from "../render/highlightRender";
+import {hideMessage, showMessage} from "../../dialog/message";
+import {genUUID} from "../../util/genID";
+import {getContenteditableElement, getLastBlock} from "../wysiwyg/getBlock";
+import {genEmptyElement} from "../../block/util";
+import {transaction} from "../wysiwyg/transaction";
+import {focusByRange} from "../util/selection";
 
 export const initUI = (protyle: IProtyle) => {
     protyle.contentElement = document.createElement("div");
@@ -48,6 +54,7 @@ export const initUI = (protyle: IProtyle) => {
     document.execCommand("DefaultParagraphSeparator", false, "p");
 
     let wheelTimeout: number;
+    const wheelId = genUUID();
     const isMacOS = isMac();
     protyle.contentElement.addEventListener("mousewheel", (event: WheelEvent) => {
         if (!window.siyuan.config.editor.fontSizeScrollZoom || (isMacOS && !event.metaKey) || (!isMacOS && !event.ctrlKey) || event.deltaX !== 0) {
@@ -70,15 +77,66 @@ export const initUI = (protyle: IProtyle) => {
         }
         setInlineStyle();
         clearTimeout(wheelTimeout);
+        showMessage(`${window.siyuan.languages.fontSize} ${window.siyuan.config.editor.fontSize}px<span class="fn__space"></span>
+<button class="b3-button b3-button--small b3-button--white">${window.siyuan.languages.reset} 16px</button>`, undefined, undefined, wheelId);
         wheelTimeout = window.setTimeout(() => {
             fetchPost("/api/setting/setEditor", window.siyuan.config.editor);
-            if (window.siyuan.config.editor.codeSyntaxHighlightLineNum) {
-                protyle.wysiwyg.element.querySelectorAll(".code-block .protyle-linenumber").forEach((block: HTMLElement) => {
-                    lineNumberRender(block);
+            protyle.wysiwyg.element.querySelectorAll(".code-block .protyle-linenumber__rows").forEach((block: HTMLElement) => {
+                lineNumberRender(block.parentElement);
+            });
+            document.querySelector(`#message [data-id="${wheelId}"] button`)?.addEventListener("click", () => {
+                window.siyuan.config.editor.fontSize = 16;
+                setInlineStyle();
+                fetchPost("/api/setting/setEditor", window.siyuan.config.editor);
+                hideMessage(wheelId);
+                protyle.wysiwyg.element.querySelectorAll(".code-block .protyle-linenumber__rows").forEach((block: HTMLElement) => {
+                    lineNumberRender(block.parentElement);
                 });
-            }
+            });
         }, Constants.TIMEOUT_LOAD);
     }, {passive: false});
+    protyle.contentElement.addEventListener("click", (event: MouseEvent & { target: HTMLElement }) => {
+        // wysiwyg 元素下方点击无效果 https://github.com/siyuan-note/siyuan/issues/12009
+        if (protyle.disabled ||
+            (!event.target.classList.contains("protyle-content") && !event.target.classList.contains("protyle-wysiwyg"))) {
+            return;
+        }
+        const lastRect = protyle.wysiwyg.element.lastElementChild.getBoundingClientRect();
+        const range = document.createRange();
+        if (event.y > lastRect.bottom) {
+            const lastEditElement = getContenteditableElement(getLastBlock(protyle.wysiwyg.element.lastElementChild));
+            if (!lastEditElement ||
+                (protyle.wysiwyg.element.lastElementChild.getAttribute("data-type") !== "NodeParagraph" && protyle.wysiwyg.element.getAttribute("data-doc-type") !== "NodeListItem") ||
+                (protyle.wysiwyg.element.lastElementChild.getAttribute("data-type") === "NodeParagraph" && getContenteditableElement(lastEditElement).innerHTML !== "")) {
+                const emptyElement = genEmptyElement(false, false);
+                protyle.wysiwyg.element.insertAdjacentElement("beforeend", emptyElement);
+                transaction(protyle, [{
+                    action: "insert",
+                    data: emptyElement.outerHTML,
+                    id: emptyElement.getAttribute("data-node-id"),
+                    previousID: emptyElement.previousElementSibling.getAttribute("data-node-id"),
+                    parentID: protyle.block.parentID
+                }], [{
+                    action: "delete",
+                    id: emptyElement.getAttribute("data-node-id")
+                }]);
+                const emptyEditElement = getContenteditableElement(emptyElement) as HTMLInputElement;
+                range.selectNodeContents(emptyEditElement);
+                range.collapse(true);
+                focusByRange(range);
+                // 需等待 range 更新再次进行渲染
+                if (protyle.options.render.breadcrumb) {
+                    setTimeout(() => {
+                        protyle.breadcrumb.render(protyle);
+                    }, Constants.TIMEOUT_TRANSITION);
+                }
+            } else if (lastEditElement) {
+                range.selectNodeContents(lastEditElement);
+                range.collapse(false);
+                focusByRange(range);
+            }
+        }
+    });
 };
 
 export const addLoading = (protyle: IProtyle, msg?: string) => {
@@ -112,15 +170,19 @@ export const setPadding = (protyle: IProtyle) => {
     const left = padding.left;
     const right = padding.right;
     if (protyle.options.backlinkData) {
-        protyle.wysiwyg.element.style.padding = `4px ${left}px 4px ${right}px`;
+        protyle.wysiwyg.element.style.padding = `4px ${right}px 4px ${left}px`;
     } else {
-        protyle.wysiwyg.element.style.padding = `${padding.top}px ${left}px ${padding.bottom}px ${right}px`;
+        protyle.wysiwyg.element.style.padding = `${padding.top}px ${right}px ${padding.bottom}px ${left}px`;
     }
     if (protyle.options.render.background) {
-        protyle.background.element.querySelector(".protyle-background__ia").setAttribute("style", `margin-left:${left}px;margin-right:${left}px`);
+        protyle.background.element.querySelector(".protyle-background__ia").setAttribute("style", `margin-left:${left}px;margin-right:${right}px`);
     }
     if (protyle.options.render.title) {
-        protyle.title.element.style.margin = `5px ${left}px 0 ${right}px`;
+        /// #if MOBILE
+        protyle.title.element.style.margin = `16px ${right}px 0 ${left}px`;
+        /// #else
+        protyle.title.element.style.margin = `5px ${right}px 0 ${left}px`;
+        /// #endif
     }
     if (window.siyuan.config.editor.displayBookmarkIcon) {
         const editorAttrElement = document.getElementById("editorAttr");
@@ -138,8 +200,8 @@ export const setPadding = (protyle: IProtyle) => {
 };
 
 export const getPadding = (protyle: IProtyle) => {
-    let left = 16;
-    let right = 24;
+    let right = 16;
+    let left = 24;
     let bottom = 16;
     if (protyle.options.typewriterMode) {
         if (isMobile()) {

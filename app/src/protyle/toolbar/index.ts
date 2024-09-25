@@ -47,6 +47,7 @@ import {linkMenu} from "../../menus/protyle";
 import {addScript} from "../util/addScript";
 import {confirmDialog} from "../../dialog/confirmDialog";
 import {pasteAsPlainText, pasteEscaped, pasteText} from "../util/paste";
+import {escapeHtml} from "../../util/escape";
 
 export class Toolbar {
     public element: HTMLElement;
@@ -599,9 +600,12 @@ export class Toolbar {
         for (let i = 0; i < newNodes.length; i++) {
             const currentNewNode = newNodes[i] as HTMLElement;
             const nextNewNode = newNodes[i + 1] as HTMLElement;
+            const currentType = currentNewNode.nodeType !== 3 ? (currentNewNode.getAttribute("data-type") || "") : "";
             if (currentNewNode.nodeType !== 3 && nextNewNode && nextNewNode.nodeType !== 3 &&
                 nextNewNode.tagName === currentNewNode.tagName &&
-                isArrayEqual((nextNewNode.getAttribute("data-type") || "").split(" "), (currentNewNode.getAttribute("data-type") || "").split(" ")) &&
+                // 表格内多个换行 https://github.com/siyuan-note/siyuan/issues/12300
+                currentNewNode.tagName !== "BR" &&
+                isArrayEqual((nextNewNode.getAttribute("data-type") || "").split(" "), currentType.split(" ")) &&
                 currentNewNode.getAttribute("data-id") === nextNewNode.getAttribute("data-id") &&
                 currentNewNode.getAttribute("data-subtype") === nextNewNode.getAttribute("data-subtype") &&
                 currentNewNode.style.color === nextNewNode.style.color &&
@@ -611,7 +615,6 @@ export class Toolbar {
                 currentNewNode.style.fontSize === nextNewNode.style.fontSize &&
                 currentNewNode.style.backgroundColor === nextNewNode.style.backgroundColor) {
                 // 合并相同的 node
-                const currentType = currentNewNode.getAttribute("data-type");
                 if (currentType.indexOf("inline-math") > -1) {
                     // 数学公式合并 data-content https://github.com/siyuan-note/siyuan/issues/6028
                     nextNewNode.setAttribute("data-content", currentNewNode.getAttribute("data-content") + nextNewNode.getAttribute("data-content"));
@@ -1184,8 +1187,10 @@ export class Toolbar {
 
     private updateLanguage(languageElement: HTMLElement, protyle: IProtyle, id: string, nodeElement: HTMLElement, oldHtml: string, selectedLang: string) {
         languageElement.textContent = selectedLang === window.siyuan.languages.clear ? "" : selectedLang;
-        window.siyuan.storage[Constants.LOCAL_CODELANG] = languageElement.textContent;
-        setStorageVal(Constants.LOCAL_CODELANG, window.siyuan.storage[Constants.LOCAL_CODELANG]);
+        if (!Constants.SIYUAN_RENDER_CODE_LANGUAGES.includes(languageElement.textContent)) {
+            window.siyuan.storage[Constants.LOCAL_CODELANG] = languageElement.textContent;
+            setStorageVal(Constants.LOCAL_CODELANG, window.siyuan.storage[Constants.LOCAL_CODELANG]);
+        }
         const editElement = getContenteditableElement(nodeElement);
         if (Constants.SIYUAN_RENDER_CODE_LANGUAGES.includes(languageElement.textContent)) {
             nodeElement.dataset.content = editElement.textContent.trim();
@@ -1194,14 +1199,8 @@ export class Toolbar {
             nodeElement.innerHTML = `<div spin="1"></div><div class="protyle-attr" contenteditable="false">${Constants.ZWSP}</div>`;
             processRender(nodeElement);
         } else {
-            const lineNumber = nodeElement.getAttribute("linenumber");
-            if (lineNumber === "true" || (lineNumber !== "false" && window.siyuan.config.editor.codeSyntaxHighlightLineNum)) {
-                editElement.classList.add("protyle-linenumber");
-            } else {
-                editElement.classList.remove("protyle-linenumber");
-            }
             (editElement as HTMLElement).textContent = editElement.textContent;
-            editElement.removeAttribute("data-render");
+            editElement.parentElement.removeAttribute("data-render");
             highlightRender(nodeElement);
         }
         nodeElement.setAttribute("updated", dayjs().format("YYYYMMDDHHmmss"));
@@ -1283,7 +1282,7 @@ export class Toolbar {
                 html += `<div class="b3-list-item">${item.replace(lowerCaseValue, "<b>" + lowerCaseValue + "</b>")}</div>`;
             });
             if (inputElement.value.trim() && !matchInput) {
-                html = `<div class="b3-list-item"><b>${inputElement.value.replace(/`| /g, "_")}</b></div>${html}`;
+                html = `<div class="b3-list-item"><b>${escapeHtml(inputElement.value.replace(/`| /g, "_"))}</b></div>${html}`;
             }
             html = `<div class="b3-list-item">${window.siyuan.languages.clear}</div>` + html;
             listElement.innerHTML = html;

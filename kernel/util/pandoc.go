@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/88250/gulu"
@@ -29,9 +30,11 @@ import (
 	"github.com/siyuan-note/logging"
 )
 
+var ErrPandocNotFound = errors.New("not found executable pandoc")
+
 func ConvertPandoc(dir string, args ...string) (path string, err error) {
 	if "" == PandocBinPath || ContainerStd != Container {
-		err = errors.New("not found executable pandoc")
+		err = ErrPandocNotFound
 		return
 	}
 
@@ -39,13 +42,13 @@ func ConvertPandoc(dir string, args ...string) (path string, err error) {
 	gulu.CmdAttr(pandoc)
 	path = filepath.Join("temp", "convert", "pandoc", dir)
 	absPath := filepath.Join(WorkspaceDir, path)
-	if err = os.MkdirAll(absPath, 0755); nil != err {
+	if err = os.MkdirAll(absPath, 0755); err != nil {
 		logging.LogErrorf("mkdir [%s] failed: [%s]", absPath, err)
 		return
 	}
 	pandoc.Dir = absPath
 	output, err := pandoc.CombinedOutput()
-	if nil != err {
+	if err != nil {
 		err = errors.Join(err, errors.New(string(output)))
 		logging.LogErrorf("pandoc convert output failed: %s", err)
 		return
@@ -56,19 +59,24 @@ func ConvertPandoc(dir string, args ...string) (path string, err error) {
 
 func Pandoc(from, to, o, content string) (err error) {
 	if "" == from || "" == to || "md" == to {
-		if err = gulu.File.WriteFileSafer(o, []byte(content), 0644); nil != err {
+		if err = gulu.File.WriteFileSafer(o, []byte(content), 0644); err != nil {
 			logging.LogErrorf("write export markdown file [%s] failed: %s", o, err)
 		}
 		return
 	}
 
+	if "" == PandocBinPath || ContainerStd != Container {
+		err = ErrPandocNotFound
+		return
+	}
+
 	dir := filepath.Join(WorkspaceDir, "temp", "convert", "pandoc", gulu.Rand.String(7))
-	if err = os.MkdirAll(dir, 0755); nil != err {
+	if err = os.MkdirAll(dir, 0755); err != nil {
 		logging.LogErrorf("mkdir [%s] failed: [%s]", dir, err)
 		return
 	}
 	tmpPath := filepath.Join(dir, gulu.Rand.String(7))
-	if err = os.WriteFile(tmpPath, []byte(content), 0644); nil != err {
+	if err = os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
 		logging.LogErrorf("write file failed: [%s]", err)
 		return
 	}
@@ -85,7 +93,7 @@ func Pandoc(from, to, o, content string) (err error) {
 	pandoc := exec.Command(PandocBinPath, args...)
 	gulu.CmdAttr(pandoc)
 	output, err := pandoc.CombinedOutput()
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("pandoc convert output [%s], error [%s]", string(output), err)
 		return
 	}
@@ -105,9 +113,9 @@ func InitPandoc() {
 
 	if confPath := filepath.Join(ConfDir, "conf.json"); gulu.File.IsExist(confPath) {
 		// Workspace built-in Pandoc is no longer initialized after customizing Pandoc path https://github.com/siyuan-note/siyuan/issues/8377
-		if data, err := os.ReadFile(confPath); nil == err {
+		if data, err := os.ReadFile(confPath); err == nil {
 			conf := map[string]interface{}{}
-			if err = gulu.JSON.UnmarshalJSON(data, &conf); nil == err && nil != conf["export"] {
+			if err = gulu.JSON.UnmarshalJSON(data, &conf); err == nil && nil != conf["export"] {
 				export := conf["export"].(map[string]interface{})
 				if customPandocBinPath := export["pandocBin"].(string); !strings.HasPrefix(customPandocBinPath, pandocDir) {
 					if pandocVer := getPandocVer(customPandocBinPath); "" != pandocVer {
@@ -123,9 +131,15 @@ func InitPandoc() {
 	defer eventbus.Publish(EvtConfPandocInitialized)
 
 	if gulu.OS.IsWindows() {
-		PandocBinPath = filepath.Join(pandocDir, "bin", "pandoc.exe")
-	} else if gulu.OS.IsDarwin() || gulu.OS.IsLinux() {
+		if "amd64" == runtime.GOARCH {
+			PandocBinPath = filepath.Join(pandocDir, "bin", "pandoc.exe")
+		}
+	} else if gulu.OS.IsDarwin() {
 		PandocBinPath = filepath.Join(pandocDir, "bin", "pandoc")
+	} else if gulu.OS.IsLinux() {
+		if "amd64" == runtime.GOARCH {
+			PandocBinPath = filepath.Join(pandocDir, "bin", "pandoc")
+		}
 	}
 	pandocVer := getPandocVer(PandocBinPath)
 	if "" != pandocVer {
@@ -143,7 +157,14 @@ func InitPandoc() {
 			pandocZip = filepath.Join(WorkingDir, "pandoc/pandoc-linux-amd64.zip")
 		}
 	}
-	if err := gulu.Zip.Unzip(pandocZip, pandocDir); nil != err {
+
+	if !gulu.File.IsExist(pandocZip) {
+		PandocBinPath = ""
+		logging.LogErrorf("pandoc zip [%s] not found", pandocZip)
+		return
+	}
+
+	if err := gulu.Zip.Unzip(pandocZip, pandocDir); err != nil {
 		logging.LogErrorf("unzip pandoc failed: %s", err)
 		return
 	}
@@ -163,7 +184,7 @@ func getPandocVer(binPath string) (ret string) {
 	cmd := exec.Command(binPath, "--version")
 	gulu.CmdAttr(cmd)
 	data, err := cmd.CombinedOutput()
-	if nil == err && strings.HasPrefix(string(data), "pandoc") {
+	if err == nil && strings.HasPrefix(string(data), "pandoc") {
 		parts := bytes.Split(data, []byte("\n"))
 		if 0 < len(parts) {
 			ret = strings.TrimPrefix(string(parts[0]), "pandoc")
@@ -183,7 +204,7 @@ func IsValidPandocBin(binPath string) bool {
 	cmd := exec.Command(binPath, "--version")
 	gulu.CmdAttr(cmd)
 	data, err := cmd.CombinedOutput()
-	if nil == err && strings.HasPrefix(string(data), "pandoc") {
+	if err == nil && strings.HasPrefix(string(data), "pandoc") {
 		return true
 	}
 	return false

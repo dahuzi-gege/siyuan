@@ -5,6 +5,11 @@
   user-select: auto;
   overflow-x: clip;
 
+  &--empty:empty:before {
+    color: var(--b3-empty-color);
+    content: attr(placeholder);
+  }
+
   .protyle-breadcrumb__bar {
     font-size: 14px;
   }
@@ -46,6 +51,18 @@
           width: calc(100% - 1px);
           left: 0;
           top: 13px;
+        }
+      }
+    }
+
+    .bq {
+      .dragover {
+        &__top:not(.av__row) {
+          box-shadow: 0 -3px 0 var(--b3-theme-primary-lighter), inset 0 1px 0 var(--b3-theme-primary-lighter) !important;
+        }
+
+        &__bottom:not(.av__row) {
+          box-shadow: 0 3px 0 var(--b3-theme-primary-lighter), inset 0 -1px 0 var(--b3-theme-primary-lighter) !important;
         }
       }
     }
@@ -172,6 +189,7 @@
           flex: 1;
           box-sizing: border-box;
           margin-right: 24px;
+          min-width: 1px;
 
           &:nth-last-child(2),
           &:last-child {
@@ -195,6 +213,7 @@
       border-bottom: 1px solid;
       color: var(--b3-protyle-inline-tag-color);
       transition: var(--b3-transition);
+      cursor: pointer; // 预览导出无此元素，只读和编辑状态都需要点击 https://github.com/siyuan-note/siyuan/issues/11854
     }
 
     span[data-type~="a"] {
@@ -326,10 +345,6 @@
         height: 100%;
       }
 
-      &:hover .protyle-action__drag {
-        display: inline-block;
-      }
-
       .protyle-action__drag {
         height: 30%;
         width: 4px;
@@ -382,10 +397,6 @@
       }
     }
 
-    & > [contenteditable="false"] > .img:hover .protyle-action__drag {
-      display: none;
-    }
-
     &.iframe {
       // https://ld246.com/article/1644827326901
       // https://github.com/siyuan-note/siyuan/issues/4172
@@ -408,10 +419,6 @@
           width: 100%;
           height: 100%;
         }
-      }
-
-      &:hover .protyle-action__drag {
-        display: inline-block;
       }
 
       .protyle-action__drag {
@@ -452,20 +459,22 @@
     }
   }
 
-  &--select,
-  &--select .hljs {
+  &--select {
     background-color: var(--b3-theme-primary-lightest) !important;
+
+    [data-node-id][style*="background-color"] {
+      opacity: .86;
+    }
   }
 
-  &--hl,
-  &--hl .hljs {
+  // https://github.com/siyuan-note/siyuan/issues/11589
+  .hljs wbr {
+    display: none;
+  }
+
+  &--hl {
     transition: var(--b3-background-transition);
     background-color: var(--b3-theme-primary-lightest) !important;
-  }
-
-  &--hl .protyle-linenumber__rows,
-  &--select .protyle-linenumber__rows {
-    background-color: var(--b3-protyle-code-linenumber-hl) !important;
   }
 
   .dragover {
@@ -595,18 +604,27 @@
   }
 }
 
+// 在思源中，不论只读模式还是预览点击图片都可以进行预览
+.protyle .img > span:nth-child(2) {
+  cursor: pointer;
+}
+
 // 导出 html 不需要编辑样式
 .protyle-wysiwyg[data-readonly="false"] {
   span[data-type~="inline-math"],
-  span[data-type~="tag"],
   .protyle-action__language,
-  .img > span:nth-child(2),
   .render-node {
     cursor: pointer;
   }
 
   span[data-type~="tag"]:hover {
     background-color: var(--b3-theme-surface-lighter);
+  }
+
+
+  .img:hover .protyle-action__drag,
+  .iframe:hover .protyle-action__drag {
+    display: inline-block;
   }
 
   .code-block .protyle-action {
@@ -629,7 +647,10 @@
   }
 
   .render-node .img:hover .protyle-icons,
-  .render-node .render-node:hover > .protyle-icons {
+  .render-node .render-node:hover > .protyle-icons,
+    // https://github.com/siyuan-note/siyuan/issues/11879
+  .protyle-wysiwyg__embed .img:hover .protyle-action__drag,
+  .protyle-wysiwyg__embed .iframe:hover .protyle-action__drag {
     display: none;
   }
 }
@@ -669,6 +690,19 @@
     .av__row--footer .av__calc:hover,
     .av__cell--header:hover {
       background-color: transparent;
+    }
+
+    .av__cell {
+      cursor: inherit;
+
+      &text--url,
+      &assetimg {
+        cursor: pointer;
+      }
+    }
+
+    .av__cell[data-block-id] > .block__icon[data-type="copy"] {
+      display: block;
     }
   }
 }

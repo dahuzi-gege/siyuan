@@ -37,22 +37,21 @@ func GetMirrorAttrViewBlockIDs(avID string) (ret []string) {
 	}
 
 	data, err := filelock.ReadFile(blocks)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("read attribute view blocks failed: %s", err)
 		return
 	}
 
 	avBlocks := map[string][]string{}
-	if err = msgpack.Unmarshal(data, &avBlocks); nil != err {
+	if err = msgpack.Unmarshal(data, &avBlocks); err != nil {
 		logging.LogErrorf("unmarshal attribute view blocks failed: %s", err)
 		return
 	}
 
 	blockIDs := avBlocks[avID]
-	for _, blockID := range blockIDs {
-		if nil != GetBlockTree(blockID) {
-			ret = append(ret, blockID)
-		}
+	bts := GetBlockTrees(blockIDs)
+	for blockID := range bts {
+		ret = append(ret, blockID)
 	}
 	return
 }
@@ -74,24 +73,21 @@ func BatchGetMirrorAttrViewBlocks(avIDs []string) (ret []*AvBlock) {
 	}
 
 	data, err := filelock.ReadFile(blocks)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("read attribute view blocks failed: %s", err)
 		return
 	}
 
 	avBlocks := map[string][]string{}
-	if err = msgpack.Unmarshal(data, &avBlocks); nil != err {
+	if err = msgpack.Unmarshal(data, &avBlocks); err != nil {
 		logging.LogErrorf("unmarshal attribute view blocks failed: %s", err)
 		return
 	}
 
 	for _, avID := range avIDs {
 		var blockIDs []string
-		for _, blockID := range avBlocks[avID] {
-			if nil == GetBlockTree(blockID) {
-				continue
-			}
-
+		bts := GetBlockTrees(avBlocks[avID])
+		for blockID := range bts {
 			blockIDs = append(blockIDs, blockID)
 		}
 		avBlock := &AvBlock{

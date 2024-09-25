@@ -64,6 +64,11 @@ declare namespace Config {
          */
         openHelp: boolean;
         /**
+         * Publishing service
+         * 发布服务
+         */
+        publish: IPublish;
+        /**
          * Whether it is running in read-only mode
          * 全局只读
          */
@@ -263,7 +268,7 @@ declare namespace Config {
      * User interface language
      * Same as {@link IAppearance.lang}
      */
-    export type TLang = "en_US" | "es_ES" | "fr_FR" | "zh_CHT" | "zh_CN" | "ja_JP";
+    export type TLang = "en_US" | "es_ES" | "fr_FR" | "zh_CHT" | "zh_CN" | "ja_JP" | "it_IT";
 
     /**
      * SiYuan bazaar related configuration
@@ -283,6 +288,14 @@ declare namespace Config {
      * SiYuan editor markdown related configuration
      */
     interface IMarkdown {
+        /**
+         * Whether to enable the inline asterisk
+         */
+        inlineAsterisk: boolean;
+        /**
+         * Whether to enable the inline underscore
+         */
+        inlineUnderscore: boolean;
         /**
          * Whether to enable the inline superscript
          */
@@ -1029,6 +1042,56 @@ declare namespace Config {
      * Log level
      */
     export type TLogLevel = "off" | "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+
+    /**
+     * Publishing service
+     */
+    export interface IPublish {
+        /**
+         * Whether to open the publishing service
+         */
+        enable: boolean;
+        /**
+         * The basic authentication settings of publishing service
+         */
+        auth: IPublishAuth;
+        /**
+         * Port on which the publishing service listens
+         */
+        port: number;
+    }
+
+    /**
+     * Publishing service authentication settings
+     */
+    export interface IPublishAuth {
+        /**
+         * Whether to enable basic authentication for publishing services
+         */
+        enable: boolean;
+        /**
+         * List of basic verified accounts
+         */
+        accounts: IPublishAuthAccount[];
+    }
+
+    /**
+     * Basic authentication account
+     */
+    export interface IPublishAuthAccount {
+        /**
+         * Account username
+         */
+        username: string;
+        /**
+         * Account password
+         */
+        password: string;
+        /**
+         * The memo text of the account
+         */
+        memo: string;
+    }
 
     /**
      * Snapshot repository related configuration
@@ -1925,7 +1988,7 @@ declare namespace Config {
          * - `1`: Group by document
          */
         group: number;
-        hasReplace: any;
+        hasReplace: boolean;
         /**
          * Readable path list
          */
@@ -1961,6 +2024,7 @@ declare namespace Config {
         r: string;
         /**
          * Whether to clear the search box after removing the currently used query condition group
+         * 移除后需记录搜索内容 https://github.com/siyuan-note/siyuan/issues/7745
          */
         removed?: boolean;
         replaceTypes: IUILayoutTabSearchConfigReplaceTypes;
@@ -2049,6 +2113,11 @@ declare namespace Config {
          * @default true
          */
         inlineMemo?: boolean;
+        /**
+         * Replace block refs
+         * @default false
+         */
+        blockRef?: boolean;
         /**
          * Replace kdb elements
          * @default true

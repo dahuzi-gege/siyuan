@@ -57,7 +57,7 @@ func GetLocalIPs() (ret []string) {
 
 	ret = []string{}
 	addrs, err := net.InterfaceAddrs()
-	if nil != err {
+	if err != nil {
 		logging.LogWarnf("get interface addresses failed: %s", err)
 		return
 	}
@@ -269,6 +269,7 @@ func IsDisplayableAsset(p string) bool {
 
 func GetAbsPathInWorkspace(relPath string) (string, error) {
 	absPath := filepath.Join(WorkspaceDir, relPath)
+	absPath = filepath.Clean(absPath)
 	if WorkspaceDir == absPath {
 		return absPath, nil
 	}

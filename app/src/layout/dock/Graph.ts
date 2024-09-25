@@ -322,6 +322,12 @@ export class Graph extends Model {
                         this.searchGraph(false, undefined, true);
                     } else if (dataType === "fullscreen") {
                         fullscreen(this.element, target);
+                        const minElement = this.element.querySelector('.block__icons .block__icon[data-type="min"]');
+                        if (this.element.className.includes("fullscreen")) {
+                            minElement.classList.add("fn__none");
+                        } else {
+                            minElement.classList.remove("fn__none");
+                        }
                     }
                     break;
                 } else if (target.classList.contains("graph__svg")) {
@@ -534,6 +540,10 @@ export class Graph extends Model {
                 case "NodeSuperBlock":
                     item.color = {background: rootStyle.getPropertyValue("--b3-graph-super-point").trim()};
                     break;
+                case "tag":
+                case "textmark tag":
+                    item.color = {background: rootStyle.getPropertyValue("--b3-graph-tag-point").trim()};
+                    break;
                 default:
                     item.color = {background: rootStyle.getPropertyValue("--b3-graph-p-point").trim()};
                     break;
@@ -652,7 +662,7 @@ export class Graph extends Model {
                     if (!node) {
                         return;
                     }
-                    if (node.type === "textmark tag") {
+                    if (-1 < node.type.indexOf("tag")) {
                         openGlobalSearch(this.app, `#${node.id}#`, !window.siyuan.ctrlIsPressed);
                         return;
                     }

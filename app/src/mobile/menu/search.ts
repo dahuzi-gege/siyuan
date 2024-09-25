@@ -591,7 +591,7 @@ const initSearchEvent = (app: App, element: Element, config: Config.IUILayoutTab
                             preventScroll(window.siyuan.mobile.editor.protyle);
                         }
                         checkFold(id, (zoomIn) => {
-                            openMobileFileById(app, id, zoomIn ? [Constants.CB_GET_ALL, Constants.CB_GET_HL] : [Constants.CB_GET_HL, Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL]);
+                            openMobileFileById(app, id, zoomIn ? [Constants.CB_GET_ALL] : [Constants.CB_GET_CONTEXT, Constants.CB_GET_ROOTSCROLL]);
                         });
                         closePanel();
                     } else {
@@ -616,7 +616,18 @@ const initSearchEvent = (app: App, element: Element, config: Config.IUILayoutTab
     }, false);
 };
 
-export const popSearch = (app: App, config = window.siyuan.storage[Constants.LOCAL_SEARCHDATA] as Config.IUILayoutTabSearchConfig) => {
+export const popSearch = (app: App, searchConfig?: any) => {
+    const config: Config.IUILayoutTabSearchConfig = JSON.parse(JSON.stringify(window.siyuan.storage[Constants.LOCAL_SEARCHDATA]));
+    const rangeText = (getCurrentEditor()?.protyle.toolbar.range || (getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : document.createRange())).toString();
+    if (rangeText) {
+        config.k = rangeText;
+    }
+    if (searchConfig) {
+        Object.keys(searchConfig).forEach((key: "r") => {
+            config[key] = searchConfig[key];
+        });
+    }
+
     activeBlur();
     hideKeyboardToolbar();
     let includeChild = true;

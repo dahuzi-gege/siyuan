@@ -20,7 +20,15 @@ import {assetMenu, imgMenu} from "../../menus/protyle";
 import {hideElements} from "../ui/hideElements";
 import {fetchPost} from "../../util/fetch";
 import {getDisplayName, pathPosix} from "../../util/pathName";
-import {addEmoji, filterEmoji, lazyLoadEmoji, lazyLoadEmojiImg, unicode2Emoji} from "../../emoji";
+import {
+    addEmoji,
+    filterEmoji,
+    getEmojiDesc,
+    getEmojiTitle,
+    lazyLoadEmoji,
+    lazyLoadEmojiImg,
+    unicode2Emoji
+} from "../../emoji";
 import {blockRender} from "../render/blockRender";
 import {uploadFiles} from "../upload";
 /// #if !MOBILE
@@ -33,6 +41,7 @@ import {isMobile} from "../../util/functions";
 import {isIPhone, isNotCtrl, isOnlyMeta} from "../util/compatibility";
 import {avRender} from "../render/av/render";
 import {genIconHTML} from "../render/util";
+import {updateAttrViewCellAnimation} from "../render/av/action";
 
 export class Hint {
     public timeId: number;
@@ -72,7 +81,7 @@ export class Hint {
                     if (index) {
                         let html = "";
                         window.siyuan.emojis[parseInt(index)].items.forEach(emoji => {
-                            html += `<button data-unicode="${emoji.unicode}" class="emojis__item ariaLabel" aria-label="${window.siyuan.config.lang === "zh_CN" ? emoji.description_zh_cn : emoji.description}">
+                            html += `<button data-unicode="${emoji.unicode}" class="emojis__item ariaLabel" aria-label="${getEmojiDesc(emoji)}">
 ${unicode2Emoji(emoji.unicode)}</button>`;
                         });
                         titleElement.nextElementSibling.innerHTML = html;
@@ -239,9 +248,9 @@ ${unicode2Emoji(emoji.unicode)}</button>`;
                 focusClass = " b3-list-item--focus";
             }
             if (hintData.html === "separator") {
-                hintsHTML += '<div class="b3-menu__separator"></div>';
+                hintsHTML += `<button data-id="${hintData.id || ""}" class="b3-menu__separator"></button>`;
             } else {
-                hintsHTML += `<button style="width: calc(100% - 16px)" class="b3-list-item b3-list-item--two${focusClass}" data-value="${encodeURIComponent(hintData.value)}">${hintData.html}</button>`;
+                hintsHTML += `<button data-id="${hintData.id || ""}" style="width: calc(100% - 16px)" class="b3-list-item b3-list-item--two${focusClass}" data-value="${encodeURIComponent(hintData.value)}">${hintData.html}</button>`;
             }
         });
         return `${hintsHTML}</div>`;
@@ -321,6 +330,7 @@ ${unicode2Emoji(emoji.unicode)}</button>`;
             id: nodeElement ? nodeElement.getAttribute("data-node-id") : protyle.block.parentID,
             beforeLen: Math.floor((Math.max(protyle.element.clientWidth / 2, 320) - 58) / 28.8),
             rootID: source === "av" ? "" : protyle.block.rootID,
+            isDatabase: source === "av",
         }, (response) => {
             let searchHTML = "";
             if (response.data.newDoc) {
@@ -329,7 +339,13 @@ ${unicode2Emoji(emoji.unicode)}</button>`;
 <span class="b3-list-item__text">${window.siyuan.languages.newFile} <mark>${response.data.k}</mark></span></div></button>`;
             }
             response.data.blocks.forEach((item: IBlock, index: number) => {
-                const blockRefHTML = `<span data-type="block-ref" data-id="${item.id}" data-subtype="s">${oldValue}</span>`;
+                let blockRefHTML;
+                if (source === "av") {
+                    // av 搜索时需要获取值 https://github.com/siyuan-note/siyuan/issues/12020
+                    blockRefHTML = `<span data-type="block-ref" data-id="${item.id}" data-subtype="s">${item.name || item.refText.replace(new RegExp(Constants.ZWSP, "g"), "")}</span>`;
+                } else {
+                    blockRefHTML = `<span data-type="block-ref" data-id="${item.id}" data-subtype="s">${oldValue}</span>`;
+                }
                 searchHTML += `<button style="width: calc(100% - 16px)" class="b3-list-item b3-list-item--two${index === 0 ? " b3-list-item--focus" : ""}" data-value="${encodeURIComponent(blockRefHTML)}">
 ${genHintItemHTML(item)}
 </button>`;
@@ -346,6 +362,7 @@ ${genHintItemHTML(item)}
         if (value && !this.enableEmoji) {
             return;
         }
+
         const panelElement = this.element.querySelector(".emojis__panel");
         if (panelElement) {
             panelElement.innerHTML = filterEmoji(value, 256);
@@ -359,16 +376,20 @@ ${genHintItemHTML(item)}
             this.element.innerHTML = `<div style="padding: 0;max-height:402px" class="emojis">
 <div class="emojis__panel">${filterEmoji(value, 256)}</div>
 <div class="fn__flex${value ? " fn__none" : ""}">
-    <button data-type="0" class="emojis__type ariaLabel" aria-label="${window.siyuan.languages.recentEmoji}">${unicode2Emoji("2b50")}</button>
-    <button data-type="1" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[0][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f527")}</button>
-    <button data-type="2" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[1][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f60d")}</button>
-    <button data-type="3" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[2][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f433")}</button>
-    <button data-type="4" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[3][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f96a")}</button>
-    <button data-type="5" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[4][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f3a8")}</button>
-    <button data-type="6" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[5][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f3dd-fe0f")}</button>
-    <button data-type="7" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[6][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f52e")}</button>
-    <button data-type="8" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[7][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("267e-fe0f")}</button>
-    <button data-type="9" class="emojis__type ariaLabel" aria-label="${window.siyuan.emojis[8][window.siyuan.config.lang === "zh_CN" ? "title_zh_cn" : "title"]}">${unicode2Emoji("1f6a9")}</button>
+    ${[
+                ["2b50", window.siyuan.languages.recentEmoji],
+                ["1f527", getEmojiTitle(0)],
+                ["1f60d", getEmojiTitle(1)],
+                ["1f433", getEmojiTitle(2)],
+                ["1f96a", getEmojiTitle(3)],
+                ["1f3a8", getEmojiTitle(4)],
+                ["1f3dd-fe0f", getEmojiTitle(5)],
+                ["1f52e", getEmojiTitle(6)],
+                ["267e-fe0f", getEmojiTitle(7)],
+                ["1f6a9", getEmojiTitle(8)],
+            ].map(([unicode, title], index) =>
+                `<button data-type="${index}" class="emojis__type ariaLabel" aria-label="${title}">${unicode2Emoji(unicode)}</button>`
+            ).join("")}
 </div>
 </div>`;
             lazyLoadEmoji(this.element);
@@ -442,6 +463,11 @@ ${genHintItemHTML(item)}
                         }]);
                     });
                 });
+                updateAttrViewCellAnimation(cellElement, {
+                    type: "block",
+                    isDetached: false,
+                    block: {content: realFileName, id: newID}
+                });
             } else {
                 const sourceId = tempElement.getAttribute("data-id");
                 rowElement.dataset.id = sourceId;
@@ -458,6 +484,14 @@ ${genHintItemHTML(item)}
                     nextID: previousID,
                     isDetached: true,
                 }]);
+                updateAttrViewCellAnimation(cellElement, {
+                    type: "block",
+                    isDetached: false,
+                    block: {
+                        content: tempElement.textContent,
+                        id: sourceId
+                    }
+                });
             }
             return;
         }
@@ -590,6 +624,7 @@ ${genHintItemHTML(item)}
                 range.insertNode(textNode);
                 range.setEnd(textNode, value.length);
                 range.collapse(false);
+                focusByRange(range);
                 return;
             } else if (value === Constants.ZWSP) {
                 range.deleteContents();
@@ -664,6 +699,7 @@ ${genHintItemHTML(item)}
                 range.deleteContents();
                 range.insertNode(document.createTextNode(":"));
                 range.collapse(false);
+                focusByRange(range);
                 this.genEmojiHTML(protyle);
                 return;
             } else if (value.indexOf("style") > -1) {
@@ -789,7 +825,7 @@ ${genHintItemHTML(item)}
                         y: rect.top,
                         isLeft: true
                     });
-                    const itemElement = window.siyuan.menus.menu.element.querySelector('[data-id="assetSubMenu"]');
+                    const itemElement = window.siyuan.menus.menu.element.querySelector('[data-id="assetVideo"], [data-id="assetAudio"], [data-id="assetIFrame"]');
                     itemElement.classList.add("b3-menu__item--show");
                     window.siyuan.menus.menu.showSubMenu(itemElement.querySelector(".b3-menu__submenu"));
                     window.siyuan.menus.menu.element.querySelector("textarea").focus();
@@ -930,8 +966,7 @@ ${genHintItemHTML(item)}
         }
         if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             hideElements(["hint"], protyle);
-            event.preventDefault();
-            event.stopPropagation();
+            // 不需要 preventDefault https://github.com/siyuan-note/siyuan/issues/11846
             return true;
         }
         return false;

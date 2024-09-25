@@ -16,7 +16,7 @@ import {Tag} from "./dock/Tag";
 import {Search} from "../search";
 import {Custom} from "./dock/Custom";
 import {newCardModel} from "../card/newCardTab";
-import {updateHotkeyTip} from "../protyle/util/compatibility";
+import {isIPad, updateHotkeyTip} from "../protyle/util/compatibility";
 import {openSearch} from "../search/spread";
 import {openRecentDocs} from "../business/openRecentDocs";
 import {openHistory} from "../history/history";
@@ -192,7 +192,7 @@ export const newCenterEmptyTab = (app: App) => {
         <svg class="b3-list-item__graphic"><use xlink:href="#iconFilesRoot"></use></svg>
         <span>${window.siyuan.languages.newNotebook}</span>
     </div>
-    <div class="b3-list-item" id="editorEmptyHelp">
+    <div class="b3-list-item${(isIPad() || window.siyuan.config.readonly) ? " fn__none" : ""}" id="editorEmptyHelp">
         <svg class="b3-list-item__graphic"><use xlink:href="#iconHelp"></use></svg>
         <span>${window.siyuan.languages.userGuide}</span>
     </div>
@@ -253,11 +253,20 @@ export const copyTab = (app: App, tab: Tab) => {
         callback(newTab: Tab) {
             let model: Model;
             if (tab.model instanceof Editor) {
+                const newAction: string[] = [];
+                // https://github.com/siyuan-note/siyuan/issues/12132
+                tab.model.editor.protyle.block.action.forEach(item => {
+                    if (item !== Constants.CB_GET_APPEND && item !== Constants.CB_GET_BEFORE && item !== Constants.CB_GET_HTML) {
+                        newAction.push(item);
+                    }
+                });
                 model = new Editor({
                     app,
                     tab: newTab,
                     blockId: tab.model.editor.protyle.block.id,
-                    rootId: tab.model.editor.protyle.block.rootID
+                    rootId: tab.model.editor.protyle.block.rootID,
+                    // https://github.com/siyuan-note/siyuan/issues/12150
+                    action: newAction,
                 });
             } else if (tab.model instanceof Asset) {
                 model = new Asset({

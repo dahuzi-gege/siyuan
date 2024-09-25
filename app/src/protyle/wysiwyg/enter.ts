@@ -83,7 +83,7 @@ export const enter = (blockElement: HTMLElement, range: Range, protyle: IProtyle
             if (languageElement) {
                 if (window.siyuan.storage[Constants.LOCAL_CODELANG] && languageElement.textContent === "") {
                     languageElement.textContent = window.siyuan.storage[Constants.LOCAL_CODELANG];
-                } else {
+                } else if (!Constants.SIYUAN_RENDER_CODE_LANGUAGES.includes(languageElement.textContent)) {
                     window.siyuan.storage[Constants.LOCAL_CODELANG] = languageElement.textContent;
                     setStorageVal(Constants.LOCAL_CODELANG, window.siyuan.storage[Constants.LOCAL_CODELANG]);
                 }
@@ -117,7 +117,7 @@ export const enter = (blockElement: HTMLElement, range: Range, protyle: IProtyle
         range.insertNode(document.createTextNode("\n"));
         range.collapse(false);
         range.insertNode(wbrElement);
-        editableElement.removeAttribute("data-render");
+        editableElement.parentElement.removeAttribute("data-render");
         highlightRender(blockElement);
         updateTransaction(protyle, blockElement.getAttribute("data-node-id"), blockElement.outerHTML, oldHTML);
         return true;
@@ -296,7 +296,6 @@ export const enter = (blockElement: HTMLElement, range: Range, protyle: IProtyle
 
 const listEnter = (protyle: IProtyle, blockElement: HTMLElement, range: Range) => {
     const listItemElement = blockElement.parentElement;
-
     const editableElement = getContenteditableElement(blockElement);
     if (// \n 是因为 https://github.com/siyuan-note/siyuan/issues/3846
         ["", "\n"].includes(editableElement.textContent) &&
@@ -450,6 +449,10 @@ const listEnter = (protyle: IProtyle, blockElement: HTMLElement, range: Range) =
     if ((editableElement?.lastElementChild?.getAttribute("data-type") || "").indexOf("inline-math") > -1 &&
         !hasNextSibling(editableElement?.lastElementChild)) {
         editableElement.insertAdjacentText("beforeend", "\n");
+    }
+    // img 后有文字，在 img 后换行
+    if (editableElement?.lastElementChild?.classList.contains("img") && !hasNextSibling(editableElement?.lastElementChild)) {
+        editableElement.insertAdjacentText("beforeend", Constants.ZWSP);
     }
     getContenteditableElement(newElement).appendChild(selectNode);
     listItemElement.insertAdjacentElement("afterend", newElement);

@@ -23,6 +23,7 @@ type TOperation =
     | "updateAttrViewColTemplate"
     | "sortAttrViewRow"
     | "sortAttrViewCol"
+    | "sortAttrViewKey"
     | "setAttrViewColPin"
     | "setAttrViewColHidden"
     | "setAttrViewColWrap"
@@ -32,6 +33,7 @@ type TOperation =
     | "updateAttrViewColOption"
     | "setAttrViewName"
     | "doUpdateUpdated"
+    | "duplicateAttrViewKey"
     | "setAttrViewColIcon"
     | "setAttrViewFilters"
     | "setAttrViewSorts"
@@ -58,7 +60,8 @@ type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
     "open-noneditableblock" |
     "open-menu-blockref" | "open-menu-fileannotationref" | "open-menu-tag" | "open-menu-link" | "open-menu-image" |
     "open-menu-av" | "open-menu-content" | "open-menu-breadcrumbmore" | "open-menu-doctree" | "open-menu-inbox" |
-    "open-siyuan-url-plugin" | "open-siyuan-url-block" |
+    "open-siyuan-url-plugin" | "open-siyuan-url-block" | "opened-notebook" |
+    "closed-notebook" |
     "paste" |
     "input-search" |
     "loaded-protyle" | "loaded-protyle-dynamic" | "loaded-protyle-static" |
@@ -168,6 +171,7 @@ interface Window {
         openExternal(url: string): void
         changeStatusBarColor(color: string, mode: number): void
         writeClipboard(text: string): void
+        writeHTMLClipboard(text: string, html: string): void
         writeImageClipboard(uri: string): void
         readClipboard(): string
         getBlockURL(): string
@@ -188,6 +192,11 @@ interface Window {
     destroyTheme(): Promise<void>
 }
 
+interface filesPath {
+    notebookId: string,
+    openPaths: string[]
+}
+
 interface IPosition {
     x: number,
     y: number,
@@ -200,6 +209,7 @@ interface ISaveLayout {
     name: string,
     layout: IObject
     time: number
+    filesPaths: filesPath[]
 }
 
 interface IWorkspace {
@@ -256,44 +266,6 @@ interface ISearchAssetOption {
     },
     sort: number,
     k: string,
-}
-
-interface ISearchOption {
-    page: number
-    removed?: boolean  // 移除后需记录搜索内容 https://github.com/siyuan-note/siyuan/issues/7745
-    name?: string
-    sort: number,  //  0：按块类型（默认），1：按创建时间升序，2：按创建时间降序，3：按更新时间升序，4：按更新时间降序，5：按内容顺序（仅在按文档分组时），6：按相关度升序，7：按相关度降序
-    group: number,  // 0：不分组，1：按文档分组
-    hasReplace: boolean,
-    method: number //  0：文本，1：查询语法，2：SQL，3：正则表达式
-    hPath: string
-    idPath: string[]
-    k: string
-    r: string
-    types: ISearchType,
-    replaceTypes: {
-        [key: string]: boolean;
-    },
-}
-
-interface ISearchType {
-    audioBlock: boolean
-    videoBlock: boolean
-    iframeBlock: boolean
-    widgetBlock: boolean
-    mathBlock: boolean
-    table: boolean
-    blockquote: boolean
-    superBlock: boolean
-    paragraph: boolean
-    document: boolean
-    heading: boolean
-    list: boolean
-    listItem: boolean
-    codeBlock: boolean
-    htmlBlock: boolean
-    embedBlock: boolean
-    databaseBlock: boolean
 }
 
 interface ITextOption {
@@ -355,16 +327,20 @@ interface IBackStack {
     zoomId?: string
 }
 
+interface IEmojiItem {
+    unicode: string,
+    description: string,
+    description_zh_cn: string,
+    description_ja_jp: string,
+    keywords: string
+}
+
 interface IEmoji {
     id: string,
     title: string,
     title_zh_cn: string,
-    items: {
-        unicode: string,
-        description: string,
-        description_zh_cn: string,
-        keywords: string
-    }[]
+    title_ja_jp: string,
+    items: IEmojiItem[]
 }
 
 interface INotebook {
@@ -543,10 +519,7 @@ interface IPluginData {
 
 interface IPluginDockTab {
     position: TPluginDockPosition,
-    size: {
-        width: number,
-        height: number
-    },
+    size: Config.IUILayoutDockPanelSize,
     icon: string,
     hotkey?: string,
     title: string,
@@ -585,7 +558,7 @@ interface IOpenFileOptions {
     keepCursor?: boolean // file，是否跳转到新 tab 上
     zoomIn?: boolean // 是否缩放
     removeCurrentTab?: boolean // 在当前页签打开时需移除原有页签
-    afterOpen?: () => void // 打开后回调
+    afterOpen?: (model?: import("../layout/Model").Model) => void // 打开后回调
 }
 
 interface ILayoutOptions {
@@ -737,6 +710,7 @@ interface IMenu {
     bind?: (element: HTMLElement) => void
     index?: number
     element?: HTMLElement
+    ignore?: boolean
 }
 
 interface IBazaarItem {

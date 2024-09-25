@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 	"unicode/utf8"
 
@@ -81,6 +82,7 @@ func InitDatabase(forceRebuild bool) (err error) {
 	}
 
 	initDBConnection()
+	treenode.InitBlockTree(forceRebuild)
 
 	if !forceRebuild {
 		// 检查数据库结构版本，如果版本不一致的话说明改过表结构，需要重建
@@ -94,14 +96,11 @@ func InitDatabase(forceRebuild bool) (err error) {
 
 	closeDatabase()
 	if gulu.File.IsExist(util.DBPath) {
-		if err = removeDatabaseFile(); nil != err {
+		if err = removeDatabaseFile(); err != nil {
 			logging.LogErrorf("remove database file [%s] failed: %s", util.DBPath, err)
 			util.PushClearProgress()
 			err = nil
 		}
-	}
-	if gulu.File.IsExist(util.BlockTreePath) {
-		treenode.InitBlockTree(true)
 	}
 
 	initDBConnection()
@@ -113,106 +112,111 @@ func InitDatabase(forceRebuild bool) (err error) {
 
 func initDBTables() {
 	_, err := db.Exec("DROP TABLE IF EXISTS stat")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [stat] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE stat (key, value)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [stat] failed: %s", err)
 	}
 	setDatabaseVer()
 
 	_, err = db.Exec("DROP TABLE IF EXISTS blocks")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [blocks] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE blocks (id, parent_id, root_id, hash, box, path, hpath, name, alias, memo, tag, content, fcontent, markdown, length, type, subtype, ial, sort, created, updated)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [blocks] failed: %s", err)
 	}
 
 	_, err = db.Exec("CREATE INDEX idx_blocks_id ON blocks(id)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_blocks_id] failed: %s", err)
 	}
 
+	_, err = db.Exec("CREATE INDEX idx_blocks_parent_id ON blocks(parent_id)")
+	if err != nil {
+		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_blocks_parent_id] failed: %s", err)
+	}
+
 	_, err = db.Exec("CREATE INDEX idx_blocks_root_id ON blocks(root_id)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_blocks_root_id] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS blocks_fts")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [blocks_fts] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE VIRTUAL TABLE blocks_fts USING fts5(id UNINDEXED, parent_id UNINDEXED, root_id UNINDEXED, hash UNINDEXED, box UNINDEXED, path UNINDEXED, hpath, name, alias, memo, tag, content, fcontent, markdown UNINDEXED, length UNINDEXED, type UNINDEXED, subtype UNINDEXED, ial, sort UNINDEXED, created UNINDEXED, updated UNINDEXED, tokenize=\"siyuan\")")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [blocks_fts] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS blocks_fts_case_insensitive")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [blocks_fts_case_insensitive] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE VIRTUAL TABLE blocks_fts_case_insensitive USING fts5(id UNINDEXED, parent_id UNINDEXED, root_id UNINDEXED, hash UNINDEXED, box UNINDEXED, path UNINDEXED, hpath, name, alias, memo, tag, content, fcontent, markdown UNINDEXED, length UNINDEXED, type UNINDEXED, subtype UNINDEXED, ial, sort UNINDEXED, created UNINDEXED, updated UNINDEXED, tokenize=\"siyuan case_insensitive\")")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [blocks_fts_case_insensitive] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS spans")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [spans] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE spans (id, block_id, root_id, box, path, content, markdown, type, ial)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [spans] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE INDEX idx_spans_root_id ON spans(root_id)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_spans_root_id] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS assets")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [assets] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE assets (id, block_id, root_id, box, docpath, path, name, title, hash)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [assets] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE INDEX idx_assets_root_id ON assets(root_id)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_assets_root_id] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS attributes")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [attributes] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE attributes (id, name, value, type, block_id, root_id, box, path)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [attributes] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE INDEX idx_attributes_root_id ON attributes(root_id)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_attributes_root_id] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS refs")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [refs] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE refs (id, def_block_id, def_block_parent_id, def_block_root_id, def_block_path, block_id, root_id, box, path, content, markdown, type)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [refs] failed: %s", err)
 	}
 
 	_, err = db.Exec("DROP TABLE IF EXISTS file_annotation_refs")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "drop table [refs] failed: %s", err)
 	}
 	_, err = db.Exec("CREATE TABLE file_annotation_refs (id, file_path, annotation_id, block_id, root_id, box, path, content, type)")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [refs] failed: %s", err)
 	}
 }
@@ -233,7 +237,7 @@ func initDBConnection() {
 		"&_case_sensitive_like=OFF"
 	var err error
 	db, err = sql.Open("sqlite3_extended", dsn)
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create database failed: %s", err)
 	}
 	db.SetMaxIdleConns(20)
@@ -254,7 +258,7 @@ func InitHistoryDatabase(forceRebuild bool) {
 	}
 
 	historyDB.Close()
-	if err := os.RemoveAll(util.HistoryDBPath); nil != err {
+	if err := os.RemoveAll(util.HistoryDBPath); err != nil {
 		logging.LogErrorf("remove history database file [%s] failed: %s", util.HistoryDBPath, err)
 		return
 	}
@@ -280,7 +284,7 @@ func initHistoryDBConnection() {
 		"&_case_sensitive_like=OFF"
 	var err error
 	historyDB, err = sql.Open("sqlite3_extended", dsn)
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create history database failed: %s", err)
 	}
 	historyDB.SetMaxIdleConns(3)
@@ -291,7 +295,7 @@ func initHistoryDBConnection() {
 func initHistoryDBTables() {
 	historyDB.Exec("DROP TABLE histories_fts_case_insensitive")
 	_, err := historyDB.Exec("CREATE VIRTUAL TABLE histories_fts_case_insensitive USING fts5(id UNINDEXED, type UNINDEXED, op UNINDEXED, title, content, path UNINDEXED, created UNINDEXED, tokenize=\"siyuan case_insensitive\")")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [histories_fts_case_insensitive] failed: %s", err)
 	}
 }
@@ -309,7 +313,7 @@ func InitAssetContentDatabase(forceRebuild bool) {
 	}
 
 	assetContentDB.Close()
-	if err := os.RemoveAll(util.AssetContentDBPath); nil != err {
+	if err := os.RemoveAll(util.AssetContentDBPath); err != nil {
 		logging.LogErrorf("remove assets database file [%s] failed: %s", util.AssetContentDBPath, err)
 		return
 	}
@@ -335,7 +339,7 @@ func initAssetContentDBConnection() {
 		"&_case_sensitive_like=OFF"
 	var err error
 	assetContentDB, err = sql.Open("sqlite3_extended", dsn)
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create assets database failed: %s", err)
 	}
 	assetContentDB.SetMaxIdleConns(3)
@@ -346,7 +350,7 @@ func initAssetContentDBConnection() {
 func initAssetContentDBTables() {
 	assetContentDB.Exec("DROP TABLE asset_contents_fts_case_insensitive")
 	_, err := assetContentDB.Exec("CREATE VIRTUAL TABLE asset_contents_fts_case_insensitive USING fts5(id UNINDEXED, name, ext, path, size UNINDEXED, updated UNINDEXED, content, tokenize=\"siyuan case_insensitive\")")
-	if nil != err {
+	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [asset_contents_fts_case_insensitive] failed: %s", err)
 	}
 }
@@ -714,7 +718,7 @@ func buildSpanFromNode(n *ast.Node, tree *parse.Tree, rootID, boxID, p string) (
 		}
 	case ast.NodeInlineHTML, ast.NodeHTMLBlock, ast.NodeIFrame, ast.NodeWidget, ast.NodeAudio, ast.NodeVideo:
 		nodes, err := html.ParseFragment(bytes.NewReader(n.Tokens), &html.Node{Type: html.ElementNode})
-		if nil != err {
+		if err != nil {
 			logging.LogErrorf("parse HTML failed: %s", err)
 			walkStatus = ast.WalkContinue
 			return
@@ -824,13 +828,13 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		if !treenode.IsNodeOCRed(n) {
 			util.PushNodeOCRQueue(n)
 		}
-		content = treenode.NodeStaticContent(n, nil, true, indexAssetPath, true)
+		content = NodeStaticContent(n, nil, true, indexAssetPath, true, nil)
 
 		fc := treenode.FirstLeafBlock(n)
 		if !treenode.IsNodeOCRed(fc) {
 			util.PushNodeOCRQueue(fc)
 		}
-		fcontent = treenode.NodeStaticContent(fc, nil, true, false, true)
+		fcontent = NodeStaticContent(fc, nil, true, false, true, nil)
 
 		parentID = n.Parent.ID
 		if h := heading(n); nil != h { // 如果在标题块下方，则将标题块作为父节点
@@ -842,7 +846,7 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		if !treenode.IsNodeOCRed(n) {
 			util.PushNodeOCRQueue(n)
 		}
-		content = treenode.NodeStaticContent(n, nil, true, indexAssetPath, true)
+		content = NodeStaticContent(n, nil, true, indexAssetPath, true, nil)
 
 		parentID = n.Parent.ID
 		if h := heading(n); nil != h {
@@ -950,22 +954,22 @@ func heading(node *ast.Node) *ast.Node {
 }
 
 func deleteByBoxTx(tx *sql.Tx, box string) (err error) {
-	if err = deleteBlocksByBoxTx(tx, box); nil != err {
+	if err = deleteBlocksByBoxTx(tx, box); err != nil {
 		return
 	}
-	if err = deleteSpansByBoxTx(tx, box); nil != err {
+	if err = deleteSpansByBoxTx(tx, box); err != nil {
 		return
 	}
-	if err = deleteAssetsByBoxTx(tx, box); nil != err {
+	if err = deleteAssetsByBoxTx(tx, box); err != nil {
 		return
 	}
-	if err = deleteAttributesByBoxTx(tx, box); nil != err {
+	if err = deleteAttributesByBoxTx(tx, box); err != nil {
 		return
 	}
-	if err = deleteBlockRefsByBoxTx(tx, box); nil != err {
+	if err = deleteBlockRefsByBoxTx(tx, box); err != nil {
 		return
 	}
-	if err = deleteFileAnnotationRefsByBoxTx(tx, box); nil != err {
+	if err = deleteFileAnnotationRefsByBoxTx(tx, box); err != nil {
 		return
 	}
 	return
@@ -985,13 +989,13 @@ func deleteBlocksByIDs(tx *sql.Tx, ids []string) (err error) {
 	var rowIDs []string
 	stmt := "SELECT ROWID FROM blocks WHERE id IN (" + strings.Join(ftsIDs, ",") + ")"
 	rows, err := tx.Query(stmt)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("query block rowIDs failed: %s", err)
 		return
 	}
 	for rows.Next() {
 		var rowID int64
-		if err = rows.Scan(&rowID); nil != err {
+		if err = rows.Scan(&rowID); err != nil {
 			logging.LogErrorf("scan block rowID failed: %s", err)
 			rows.Close()
 			return
@@ -1005,18 +1009,18 @@ func deleteBlocksByIDs(tx *sql.Tx, ids []string) (err error) {
 	}
 
 	stmt = "DELETE FROM blocks WHERE ROWID IN (" + strings.Join(rowIDs, ",") + ")"
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 
 	stmt = "DELETE FROM blocks_fts WHERE ROWID IN (" + strings.Join(rowIDs, ",") + ")"
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 
 	if !caseSensitive {
 		stmt = "DELETE FROM blocks_fts_case_insensitive WHERE ROWID IN (" + strings.Join(rowIDs, ",") + ")"
-		if err = execStmtTx(tx, stmt); nil != err {
+		if err = execStmtTx(tx, stmt); err != nil {
 			return
 		}
 	}
@@ -1025,16 +1029,16 @@ func deleteBlocksByIDs(tx *sql.Tx, ids []string) (err error) {
 
 func deleteBlocksByBoxTx(tx *sql.Tx, box string) (err error) {
 	stmt := "DELETE FROM blocks WHERE box = ?"
-	if err = execStmtTx(tx, stmt, box); nil != err {
+	if err = execStmtTx(tx, stmt, box); err != nil {
 		return
 	}
 	stmt = "DELETE FROM blocks_fts WHERE box = ?"
-	if err = execStmtTx(tx, stmt, box); nil != err {
+	if err = execStmtTx(tx, stmt, box); err != nil {
 		return
 	}
 	if !caseSensitive {
 		stmt = "DELETE FROM blocks_fts_case_insensitive WHERE box = ?"
-		if err = execStmtTx(tx, stmt, box); nil != err {
+		if err = execStmtTx(tx, stmt, box); err != nil {
 			return
 		}
 	}
@@ -1092,7 +1096,7 @@ func deleteRefsByPathTx(tx *sql.Tx, box, path string) (err error) {
 }
 
 func deleteRefsByBoxTx(tx *sql.Tx, box string) (err error) {
-	if err = deleteFileAnnotationRefsByBoxTx(tx, box); nil != err {
+	if err = deleteFileAnnotationRefsByBoxTx(tx, box); err != nil {
 		return
 	}
 	return deleteBlockRefsByBoxTx(tx, box)
@@ -1124,37 +1128,37 @@ func deleteFileAnnotationRefsByBoxTx(tx *sql.Tx, box string) (err error) {
 
 func deleteByRootID(tx *sql.Tx, rootID string, context map[string]interface{}) (err error) {
 	stmt := "DELETE FROM blocks WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	stmt = "DELETE FROM blocks_fts WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	if !caseSensitive {
 		stmt = "DELETE FROM blocks_fts_case_insensitive WHERE root_id = ?"
-		if err = execStmtTx(tx, stmt, rootID); nil != err {
+		if err = execStmtTx(tx, stmt, rootID); err != nil {
 			return
 		}
 	}
 	stmt = "DELETE FROM spans WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	stmt = "DELETE FROM assets WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	stmt = "DELETE FROM refs WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	stmt = "DELETE FROM file_annotation_refs WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	stmt = "DELETE FROM attributes WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, rootID); nil != err {
+	if err = execStmtTx(tx, stmt, rootID); err != nil {
 		return
 	}
 	ClearCache()
@@ -1170,37 +1174,37 @@ func batchDeleteByRootIDs(tx *sql.Tx, rootIDs []string, context map[string]inter
 	ids := strings.Join(rootIDs, "','")
 	ids = "('" + ids + "')"
 	stmt := "DELETE FROM blocks WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	stmt = "DELETE FROM blocks_fts WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	if !caseSensitive {
 		stmt = "DELETE FROM blocks_fts_case_insensitive WHERE root_id IN " + ids
-		if err = execStmtTx(tx, stmt); nil != err {
+		if err = execStmtTx(tx, stmt); err != nil {
 			return
 		}
 	}
 	stmt = "DELETE FROM spans WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	stmt = "DELETE FROM assets WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	stmt = "DELETE FROM refs WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	stmt = "DELETE FROM file_annotation_refs WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	stmt = "DELETE FROM attributes WHERE root_id IN " + ids
-	if err = execStmtTx(tx, stmt); nil != err {
+	if err = execStmtTx(tx, stmt); err != nil {
 		return
 	}
 	ClearCache()
@@ -1210,73 +1214,99 @@ func batchDeleteByRootIDs(tx *sql.Tx, rootIDs []string, context map[string]inter
 
 func batchDeleteByPathPrefix(tx *sql.Tx, boxID, pathPrefix string) (err error) {
 	stmt := "DELETE FROM blocks WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	stmt = "DELETE FROM blocks_fts WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	if !caseSensitive {
 		stmt = "DELETE FROM blocks_fts_case_insensitive WHERE box = ? AND path LIKE ?"
-		if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+		if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 			return
 		}
 	}
 	stmt = "DELETE FROM spans WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	stmt = "DELETE FROM assets WHERE box = ? AND docpath LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	stmt = "DELETE FROM refs WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	stmt = "DELETE FROM file_annotation_refs WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	stmt = "DELETE FROM attributes WHERE box = ? AND path LIKE ?"
-	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); nil != err {
+	if err = execStmtTx(tx, stmt, boxID, pathPrefix+"%"); err != nil {
 		return
 	}
 	ClearCache()
 	return
 }
 
-func batchUpdateHPath(tx *sql.Tx, rootID, newHPath string, context map[string]interface{}) (err error) {
-	stmt := "UPDATE blocks SET hpath = ? WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, newHPath, rootID); nil != err {
+func batchUpdatePath(tx *sql.Tx, tree *parse.Tree, context map[string]interface{}) (err error) {
+	stmt := "UPDATE blocks SET box = ?, path = ?, hpath = ? WHERE root_id = ?"
+	if err = execStmtTx(tx, stmt, tree.Box, tree.Path, tree.HPath, tree.ID); err != nil {
 		return
 	}
-	stmt = "UPDATE blocks_fts SET hpath = ? WHERE root_id = ?"
-	if err = execStmtTx(tx, stmt, newHPath, rootID); nil != err {
+	stmt = "UPDATE blocks_fts SET box = ?, path = ?, hpath = ? WHERE root_id = ?"
+	if err = execStmtTx(tx, stmt, tree.Box, tree.Path, tree.HPath, tree.ID); err != nil {
 		return
 	}
 	if !caseSensitive {
-		stmt = "UPDATE blocks_fts_case_insensitive SET hpath = ? WHERE root_id = ?"
-		if err = execStmtTx(tx, stmt, newHPath, rootID); nil != err {
+		stmt = "UPDATE blocks_fts_case_insensitive SET box = ?, path = ?, hpath = ? WHERE root_id = ?"
+		if err = execStmtTx(tx, stmt, tree.Box, tree.Path, tree.HPath, tree.ID); err != nil {
 			return
 		}
 	}
 	ClearCache()
-	evtHash := fmt.Sprintf("%x", sha256.Sum256([]byte(rootID)))[:7]
+	evtHash := fmt.Sprintf("%x", sha256.Sum256([]byte(tree.ID)))[:7]
+	eventbus.Publish(eventbus.EvtSQLUpdateBlocksHPaths, context, 1, evtHash)
+	return
+}
+
+func batchUpdateHPath(tx *sql.Tx, tree *parse.Tree, context map[string]interface{}) (err error) {
+	stmt := "UPDATE blocks SET hpath = ? WHERE root_id = ?"
+	if err = execStmtTx(tx, stmt, tree.HPath, tree.ID); err != nil {
+		return
+	}
+	stmt = "UPDATE blocks_fts SET hpath = ? WHERE root_id = ?"
+	if err = execStmtTx(tx, stmt, tree.HPath, tree.ID); err != nil {
+		return
+	}
+	if !caseSensitive {
+		stmt = "UPDATE blocks_fts_case_insensitive SET hpath = ? WHERE root_id = ?"
+		if err = execStmtTx(tx, stmt, tree.HPath, tree.ID); err != nil {
+			return
+		}
+	}
+	ClearCache()
+	evtHash := fmt.Sprintf("%x", sha256.Sum256([]byte(tree.ID)))[:7]
 	eventbus.Publish(eventbus.EvtSQLUpdateBlocksHPaths, context, 1, evtHash)
 	return
 }
 
 func CloseDatabase() {
-	if err := closeDatabase(); nil != err {
+	if err := closeDatabase(); err != nil {
 		logging.LogErrorf("close database failed: %s", err)
 		return
 	}
-	if err := historyDB.Close(); nil != err {
+	if err := historyDB.Close(); err != nil {
 		logging.LogErrorf("close history database failed: %s", err)
 		return
 	}
+	if err := assetContentDB.Close(); err != nil {
+		logging.LogErrorf("close asset content database failed: %s", err)
+		return
+	}
+	treenode.CloseDatabase()
 	logging.LogInfof("closed database")
 }
 
@@ -1298,7 +1328,7 @@ func query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func beginTx() (tx *sql.Tx, err error) {
-	if tx, err = db.Begin(); nil != err {
+	if tx, err = db.Begin(); err != nil {
 		logging.LogErrorf("begin tx failed: %s\n  %s", err, logging.ShortStack())
 		if strings.Contains(err.Error(), "database is locked") {
 			os.Exit(logging.ExitCodeReadOnlyDatabase)
@@ -1313,14 +1343,14 @@ func commitTx(tx *sql.Tx) (err error) {
 		return errors.New("tx is nil")
 	}
 
-	if err = tx.Commit(); nil != err {
+	if err = tx.Commit(); err != nil {
 		logging.LogErrorf("commit tx failed: %s\n  %s", err, logging.ShortStack())
 	}
 	return
 }
 
 func beginHistoryTx() (tx *sql.Tx, err error) {
-	if tx, err = historyDB.Begin(); nil != err {
+	if tx, err = historyDB.Begin(); err != nil {
 		logging.LogErrorf("begin history tx failed: %s\n  %s", err, logging.ShortStack())
 		if strings.Contains(err.Error(), "database is locked") {
 			os.Exit(logging.ExitCodeReadOnlyDatabase)
@@ -1335,14 +1365,14 @@ func commitHistoryTx(tx *sql.Tx) (err error) {
 		return errors.New("tx is nil")
 	}
 
-	if err = tx.Commit(); nil != err {
+	if err = tx.Commit(); err != nil {
 		logging.LogErrorf("commit tx failed: %s\n  %s", err, logging.ShortStack())
 	}
 	return
 }
 
 func beginAssetContentTx() (tx *sql.Tx, err error) {
-	if tx, err = assetContentDB.Begin(); nil != err {
+	if tx, err = assetContentDB.Begin(); err != nil {
 		logging.LogErrorf("begin asset content tx failed: %s\n  %s", err, logging.ShortStack())
 		if strings.Contains(err.Error(), "database is locked") {
 			os.Exit(logging.ExitCodeReadOnlyDatabase)
@@ -1357,7 +1387,7 @@ func commitAssetContentTx(tx *sql.Tx) (err error) {
 		return errors.New("tx is nil")
 	}
 
-	if err = tx.Commit(); nil != err {
+	if err = tx.Commit(); err != nil {
 		logging.LogErrorf("commit tx failed: %s\n  %s", err, logging.ShortStack())
 	}
 	return
@@ -1365,10 +1395,10 @@ func commitAssetContentTx(tx *sql.Tx) (err error) {
 
 func prepareExecInsertTx(tx *sql.Tx, stmtSQL string, args []interface{}) (err error) {
 	stmt, err := tx.Prepare(stmtSQL)
-	if nil != err {
+	if err != nil {
 		return
 	}
-	if _, err = stmt.Exec(args...); nil != err {
+	if _, err = stmt.Exec(args...); err != nil {
 		logging.LogErrorf("exec database stmt [%s] failed: %s", stmtSQL, err)
 		return
 	}
@@ -1376,7 +1406,7 @@ func prepareExecInsertTx(tx *sql.Tx, stmtSQL string, args []interface{}) (err er
 }
 
 func execStmtTx(tx *sql.Tx, stmt string, args ...interface{}) (err error) {
-	if _, err = tx.Exec(stmt, args...); nil != err {
+	if _, err = tx.Exec(stmt, args...); err != nil {
 		if strings.Contains(err.Error(), "database disk image is malformed") {
 			tx.Rollback()
 			closeDatabase()
@@ -1437,15 +1467,15 @@ func ialAttr(ial, name string) (ret string) {
 
 func removeDatabaseFile() (err error) {
 	err = os.RemoveAll(util.DBPath)
-	if nil != err {
+	if err != nil {
 		return
 	}
 	err = os.RemoveAll(util.DBPath + "-shm")
-	if nil != err {
+	if err != nil {
 		return
 	}
 	err = os.RemoveAll(util.DBPath + "-wal")
-	if nil != err {
+	if err != nil {
 		return
 	}
 	return
@@ -1460,4 +1490,21 @@ func closeDatabase() (err error) {
 	debug.FreeOSMemory()
 	runtime.GC() // 没有这句的话文件句柄不会释放，后面就无法删除文件
 	return
+}
+
+func SQLTemplateFuncs(templateFuncMap *template.FuncMap) {
+	(*templateFuncMap)["queryBlocks"] = func(stmt string, args ...string) (retBlocks []*Block) {
+		for _, arg := range args {
+			stmt = strings.Replace(stmt, "?", arg, 1)
+		}
+		retBlocks = SelectBlocksRawStmt(stmt, 1, 512)
+		return
+	}
+	(*templateFuncMap)["querySpans"] = func(stmt string, args ...string) (retSpans []*Span) {
+		for _, arg := range args {
+			stmt = strings.Replace(stmt, "?", arg, 1)
+		}
+		retSpans = SelectSpansRawStmt(stmt, 512)
+		return
+	}
 }

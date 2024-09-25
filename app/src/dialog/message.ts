@@ -32,14 +32,26 @@ export const initMessage = () => {
             target = target.parentElement;
         }
     });
+    const tempMessageElement = document.getElementById("tempMessage");
+    if (tempMessageElement) {
+        showMessage(tempMessageElement.innerHTML);
+        tempMessageElement.remove();
+    }
 };
 
 // type: info/error; timeout: 0 手动关闭；-1 用不关闭
 export const showMessage = (message: string, timeout = 6000, type = "info", messageId?: string) => {
     const messagesElement = document.getElementById("message").firstElementChild;
     if (!messagesElement) {
-        alert(message);
-        return ;
+        document.body.insertAdjacentHTML("beforeend", `<div style="top: 10px;
+    position: fixed;
+    z-index: 100;
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    right: 10px;
+    border: 1px solid #e0e0e0;" id='tempMessage'>${message}</div>`);
+        return;
     }
     const id = messageId || genUUID();
     const existElement = messagesElement.querySelector(`.b3-snackbar[data-id="${id}"]`);
@@ -97,10 +109,12 @@ export const hideMessage = (id?: string) => {
         const messageElement = messagesElement.querySelector(`[data-id="${id}"]`);
         if (messageElement) {
             messageElement.classList.add("b3-snackbar--hide");
+            window.clearTimeout(parseInt(messageElement.getAttribute("data-timeoutid")));
             setTimeout(() => {
                 messageElement.remove();
                 if (messagesElement.childElementCount === 0) {
-                    hideMessage();
+                    messagesElement.parentElement.classList.remove("b3-snackbars--show");
+                    messagesElement.innerHTML = "";
                 }
             }, Constants.TIMEOUT_INPUT);
         }

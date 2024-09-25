@@ -359,7 +359,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
         <kbd>${updateHotkeyTip(window.siyuan.config.keymap.general.newFile.custom)}</kbd> ${window.siyuan.languages.new}
         <kbd>${window.siyuan.languages.enterKey}/${window.siyuan.languages.doubleClick}</kbd> ${window.siyuan.languages.searchTip2}
         <kbd>${window.siyuan.languages.click}</kbd> ${window.siyuan.languages.searchTip3}
-        <kbd>${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${updateHotkeyTip("⌥")}${window.siyuan.languages.click}</kbd> ${window.siyuan.languages.searchTip4}
+        <kbd>${updateHotkeyTip(window.siyuan.config.keymap.editor.general.insertRight.custom)}/${updateHotkeyTip("⌥" + window.siyuan.languages.click)}</kbd> ${window.siyuan.languages.searchTip4}
         <kbd>Esc</kbd> ${window.siyuan.languages.searchTip5}
     </div>
 </div>
@@ -509,7 +509,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                     page: 1,
                     types: getDefaultType(),
                     replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
-                }, config, edit);
+                }, config, edit, true);
                 element.querySelector(".b3-chip--current")?.classList.remove("b3-chip--current");
                 event.stopPropagation();
                 event.preventDefault();
@@ -561,6 +561,22 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                         return true;
                     }
                 });
+                if (target.parentElement.classList.contains("b3-chip--current")) {
+                    updateConfig(element, {
+                        removed: true,
+                        sort: 0,
+                        group: 0,
+                        hasReplace: false,
+                        method: 0,
+                        hPath: "",
+                        idPath: [],
+                        k: "",
+                        r: "",
+                        page: 1,
+                        types: getDefaultType(),
+                        replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
+                    }, config, edit, true);
+                }
                 target.parentElement.remove();
                 event.stopPropagation();
                 event.preventDefault();
@@ -751,7 +767,7 @@ export const genSearch = (app: App, config: Config.IUILayoutTabSearchConfig, ele
                         page: 1,
                         types: getDefaultType(),
                         replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
-                    }, config, edit);
+                    }, config, edit, true);
                     element.querySelector("#criteria .b3-chip--current")?.classList.remove("b3-chip--current");
                 }, () => {
                     const localData = window.siyuan.storage[Constants.LOCAL_SEARCHKEYS];
@@ -1072,7 +1088,8 @@ export const getQueryTip = (method: number) => {
     return methodTip;
 };
 
-const updateConfig = (element: Element, item: Config.IUILayoutTabSearchConfig, config: Config.IUILayoutTabSearchConfig, edit: Protyle) => {
+export const updateConfig = (element: Element, item: Config.IUILayoutTabSearchConfig, config: Config.IUILayoutTabSearchConfig,
+                             edit: Protyle, clear = false) => {
     const dialogElement = hasClosestByClassName(element, "b3-dialog--open");
     if (dialogElement && dialogElement.getAttribute("data-key") === Constants.DIALOG_SEARCH) {
         // https://github.com/siyuan-note/siyuan/issues/6828
@@ -1123,7 +1140,9 @@ const updateConfig = (element: Element, item: Config.IUILayoutTabSearchConfig, c
     } else {
         searchIncludeElement.setAttribute("disabled", "disabled");
     }
-    (element.querySelector("#searchInput") as HTMLInputElement).value = item.k;
+    if (item.k || clear) {
+        (element.querySelector("#searchInput") as HTMLInputElement).value = item.k;
+    }
     (element.querySelector("#replaceInput") as HTMLInputElement).value = item.r;
     element.querySelector("#searchSyntaxCheck").setAttribute("aria-label", getQueryTip(item.method));
     Object.assign(config, item);
@@ -1242,6 +1261,7 @@ export const replace = (element: Element, config: Config.IUILayoutTabSearchConfi
             return;
         }
         if (isAll) {
+            inputEvent(element, config, edit, true);
             return;
         }
         const rootId = currentList.getAttribute("data-root-id");
@@ -1428,7 +1448,7 @@ ${getAttr(item)}
         config.method === 0 ? `<div class="b3-list-item b3-list-item--focus" data-type="search-new">
     <svg class="b3-list-item__graphic"><use xlink:href="#iconFile"></use></svg>
     <span class="b3-list-item__text">
-        ${window.siyuan.languages.newFile} <mark>${(element.querySelector("#searchInput") as HTMLInputElement).value}</mark>
+        ${window.siyuan.languages.newFile} <mark>${escapeHtml((element.querySelector("#searchInput") as HTMLInputElement).value)}</mark>
     </span>
     <kbd class="b3-list-item__meta">${window.siyuan.languages.enterNew}</kbd>
 </div>

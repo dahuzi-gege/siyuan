@@ -55,7 +55,7 @@ func GetDocInfo(blockID string) (ret *BlockInfo) {
 	WaitForWritingFiles()
 
 	tree, err := LoadTreeByBlockID(blockID)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("load tree by root id [%s] failed: %s", blockID, err)
 		return
 	}
@@ -71,17 +71,17 @@ func GetDocInfo(blockID string) (ret *BlockInfo) {
 			delete(ret.IAL, "scroll")
 		} else {
 			if zoomInId := scroll["zoomInId"]; nil != zoomInId {
-				if nil == treenode.GetBlockTree(zoomInId.(string)) {
+				if !treenode.ExistBlockTree(zoomInId.(string)) {
 					delete(ret.IAL, "scroll")
 				}
 			} else {
 				if startId := scroll["startId"]; nil != startId {
-					if nil == treenode.GetBlockTree(startId.(string)) {
+					if !treenode.ExistBlockTree(startId.(string)) {
 						delete(ret.IAL, "scroll")
 					}
 				}
 				if endId := scroll["endId"]; nil != endId {
-					if nil == treenode.GetBlockTree(endId.(string)) {
+					if !treenode.ExistBlockTree(endId.(string)) {
 						delete(ret.IAL, "scroll")
 					}
 				}
@@ -111,7 +111,7 @@ func GetDocInfo(blockID string) (ret *BlockInfo) {
 	var subFileCount int
 	boxLocalPath := filepath.Join(util.DataDir, tree.Box)
 	subFiles, err := os.ReadDir(filepath.Join(boxLocalPath, strings.TrimSuffix(tree.Path, ".sy")))
-	if nil == err {
+	if err == nil {
 		for _, subFile := range subFiles {
 			if strings.HasSuffix(subFile.Name(), ".sy") {
 				subFileCount++
@@ -130,8 +130,8 @@ func GetBlockRefText(id string) string {
 	}
 
 	tree, err := LoadTreeByBlockID(id)
-	if nil != err {
-		return ErrTreeNotFound.Error()
+	if err != nil {
+		return ""
 	}
 
 	node := treenode.GetNodeInTree(tree, id)
@@ -215,21 +215,21 @@ func getNodeRefText0(node *ast.Node) string {
 	return ret
 }
 
-func GetBlockRefIDs(id string) (refIDs, refTexts, defIDs []string) {
+func GetBlockRefs(defID string) (refIDs, refTexts, defIDs []string) {
 	refIDs = []string{}
 	refTexts = []string{}
 	defIDs = []string{}
-	bt := treenode.GetBlockTree(id)
+	bt := treenode.GetBlockTree(defID)
 	if nil == bt {
 		return
 	}
 
 	isDoc := bt.ID == bt.RootID
-	refIDs, refTexts = sql.QueryRefIDsByDefID(id, isDoc)
+	refIDs, refTexts = sql.QueryRefIDsByDefID(defID, isDoc)
 	if isDoc {
-		defIDs = sql.QueryChildDefIDsByRootDefID(id)
+		defIDs = sql.QueryChildDefIDsByRootDefID(defID)
 	} else {
-		defIDs = append(defIDs, id)
+		defIDs = append(defIDs, defID)
 	}
 	return
 }

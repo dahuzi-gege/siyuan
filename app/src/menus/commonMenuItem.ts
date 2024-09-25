@@ -176,7 +176,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
         <span data-action="remove" class="block__icon block__icon--show"><svg><use xlink:href="#iconMin"></use></svg></span>
     </div>
     <div class="fn__hr"></div>
-    <textarea spellcheck="false" class="b3-text-field fn__block" rows="1" data-name="${item}">${attrs[item]}</textarea>
+    <textarea style="resize: vertical;" spellcheck="false" class="b3-text-field fn__block" rows="1" data-name="${item}">${attrs[item]}</textarea>
 </label>`;
         }
     });
@@ -224,7 +224,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
             <label class="b3-label b3-label--noborder">
                 ${window.siyuan.languages.memo}
                 <div class="fn__hr"></div>
-                <textarea spellcheck="${window.siyuan.config.editor.spellcheck}" class="b3-text-field fn__block" placeholder="${window.siyuan.languages.attrMemoTip}" rows="2" data-name="memo">${attrs.memo || ""}</textarea>
+                <textarea style="resize: vertical" spellcheck="${window.siyuan.config.editor.spellcheck}" class="b3-text-field fn__block" placeholder="${window.siyuan.languages.attrMemoTip}" rows="2" data-name="memo">${attrs.memo || ""}</textarea>
             </label>
             ${notifyHTML}
         </div>
@@ -335,7 +335,7 @@ export const openFileAttr = (attrs: IObject, focusName = "bookmark", protyle?: I
         <span data-action="remove" class="block__icon block__icon--show"><svg><use xlink:href="#iconMin"></use></svg></span>
     </div>
     <div class="fn__hr"></div>
-    <textarea spellcheck="false" data-name="custom-${inputElement.value}" class="b3-text-field fn__block" rows="1" placeholder="${window.siyuan.languages.attrValue1}"></textarea>
+    <textarea style="resize: vertical" spellcheck="false" data-name="custom-${inputElement.value}" class="b3-text-field fn__block" rows="1" placeholder="${window.siyuan.languages.attrValue1}"></textarea>
 </div>`);
                     const valueElement = target.parentElement.previousElementSibling.querySelector(".b3-text-field") as HTMLInputElement;
                     valueElement.focus();
@@ -372,7 +372,8 @@ export const openAttr = (nodeElement: Element, focusName = "bookmark", protyle?:
 
 export const copySubMenu = (id: string, accelerator = true, focusElement?: Element) => {
     return [{
-        icon: "iconRef",
+        id: "copyBlockRef",
+        iconHTML: "",
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyBlockRef.custom : undefined,
         label: window.siyuan.languages.copyBlockRef,
         click: () => {
@@ -384,7 +385,8 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
             }
         }
     }, {
-        icon: "iconSQL",
+        id: "copyBlockEmbed",
+        iconHTML: "",
         label: window.siyuan.languages.copyBlockEmbed,
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyBlockEmbed.custom : undefined,
         click: () => {
@@ -394,7 +396,8 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
             }
         }
     }, {
-        icon: "iconSiYuan",
+        id: "copyProtocol",
+        iconHTML: "",
         label: window.siyuan.languages.copyProtocol,
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyProtocol.custom : undefined,
         click: () => {
@@ -404,6 +407,8 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
             }
         }
     }, {
+        id: "copyProtocolInMd",
+        iconHTML: "",
         label: window.siyuan.languages.copyProtocolInMd,
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyProtocolInMd.custom : undefined,
         click: () => {
@@ -415,6 +420,8 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
             }
         }
     }, {
+        id: "copyHPath",
+        iconHTML: "",
         label: window.siyuan.languages.copyHPath,
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyHPath.custom : undefined,
         click: () => {
@@ -425,6 +432,8 @@ export const copySubMenu = (id: string, accelerator = true, focusElement?: Eleme
             });
         }
     }, {
+        id: "copyID",
+        iconHTML: "",
         label: window.siyuan.languages.copyID,
         accelerator: accelerator ? window.siyuan.config.keymap.editor.general.copyID.custom : undefined,
         click: () => {

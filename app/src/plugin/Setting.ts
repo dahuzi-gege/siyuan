@@ -7,6 +7,7 @@ export class Setting {
     private destroyCallback: () => void;
     private width: string;
     private height: string;
+    public dialog:Dialog;
 
     constructor(options: {
         height?: string,
@@ -15,6 +16,7 @@ export class Setting {
         confirmCallback?: () => void
     }) {
         this.confirmCallback = options.confirmCallback;
+        this.destroyCallback = options.destroyCallback;
         this.width = options.width || (isMobile() ? "92vw" : "768px");
         this.height = options.height || "80vh";
     }
@@ -50,7 +52,7 @@ export class Setting {
             }
             const tagName = actionElement?.classList.contains("b3-switch") ? "label" : "div";
             if (typeof item.direction === "undefined") {
-                item.direction = "TEXTAREA" === actionElement.tagName ? "row" : "column";
+                item.direction = (!actionElement || "TEXTAREA" === actionElement.tagName) ? "row" : "column";
             }
             if (item.direction === "row") {
                 html = `<${tagName} class="b3-label">
@@ -97,5 +99,6 @@ export class Setting {
             }
             dialog.destroy();
         });
+        this.dialog = dialog;
     }
 }

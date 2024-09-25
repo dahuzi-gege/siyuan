@@ -27,7 +27,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/88250/gulu"
-	"github.com/facette/natsort"
 	"github.com/gin-gonic/gin"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/model"
@@ -57,7 +56,7 @@ func checkWorkspaceDir(c *gin.Context) {
 	}
 
 	entries, err := os.ReadDir(path)
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = fmt.Sprintf("read workspace dir [%s] failed: %s", path, err)
 	}
@@ -104,7 +103,7 @@ func createWorkspaceDir(c *gin.Context) {
 	}
 
 	if !gulu.File.IsExist(absPath) {
-		if err := os.MkdirAll(absPath, 0755); nil != err {
+		if err := os.MkdirAll(absPath, 0755); err != nil {
 			ret.Code = -1
 			ret.Msg = fmt.Sprintf("create workspace dir [%s] failed: %s", absPath, err)
 			return
@@ -112,7 +111,7 @@ func createWorkspaceDir(c *gin.Context) {
 	}
 
 	workspacePaths, err := util.ReadWorkspacePaths()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
@@ -120,7 +119,7 @@ func createWorkspaceDir(c *gin.Context) {
 
 	workspacePaths = append(workspacePaths, absPath)
 
-	if err = util.WriteWorkspacePaths(workspacePaths); nil != err {
+	if err = util.WriteWorkspacePaths(workspacePaths); err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
@@ -147,7 +146,7 @@ func removeWorkspaceDir(c *gin.Context) {
 	}
 
 	workspacePaths, err := util.ReadWorkspacePaths()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
@@ -155,7 +154,7 @@ func removeWorkspaceDir(c *gin.Context) {
 
 	workspacePaths = gulu.Str.RemoveElem(workspacePaths, path)
 
-	if err = util.WriteWorkspacePaths(workspacePaths); nil != err {
+	if err = util.WriteWorkspacePaths(workspacePaths); err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
@@ -174,7 +173,7 @@ func removeWorkspaceDirPhysically(c *gin.Context) {
 	path := arg["path"].(string)
 	if gulu.File.IsDir(path) {
 		err := os.RemoveAll(path)
-		if nil != err {
+		if err != nil {
 			ret.Code = -1
 			ret.Msg = err.Error()
 			return
@@ -202,7 +201,7 @@ func getMobileWorkspaces(c *gin.Context) {
 
 	root := filepath.Dir(util.WorkspaceDir)
 	dirs, err := os.ReadDir(root)
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("read dir [%s] failed: %s", root, err)
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -229,9 +228,16 @@ func getWorkspaces(c *gin.Context) {
 	defer c.JSON(http.StatusOK, ret)
 
 	workspacePaths, err := util.ReadWorkspacePaths()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
+		return
+	}
+
+	if role := model.GetGinContextRole(c); !model.IsValidRole(role, []model.Role{
+		model.RoleAdministrator,
+	}) {
+		ret.Data = []*Workspace{}
 		return
 	}
 
@@ -245,10 +251,10 @@ func getWorkspaces(c *gin.Context) {
 		}
 	}
 	sort.Slice(openedWorkspaces, func(i, j int) bool {
-		return natsort.Compare(util.RemoveEmojiInvisible(filepath.Base(openedWorkspaces[i].Path)), util.RemoveEmojiInvisible(filepath.Base(openedWorkspaces[j].Path)))
+		return util.NaturalCompare(filepath.Base(openedWorkspaces[i].Path), filepath.Base(openedWorkspaces[j].Path))
 	})
 	sort.Slice(closedWorkspaces, func(i, j int) bool {
-		return natsort.Compare(util.RemoveEmojiInvisible(filepath.Base(closedWorkspaces[i].Path)), util.RemoveEmojiInvisible(filepath.Base(closedWorkspaces[j].Path)))
+		return util.NaturalCompare(filepath.Base(closedWorkspaces[i].Path), filepath.Base(closedWorkspaces[j].Path))
 	})
 	workspaces = append(workspaces, openedWorkspaces...)
 	workspaces = append(workspaces, closedWorkspaces...)
@@ -292,7 +298,7 @@ func setWorkspaceDir(c *gin.Context) {
 	}
 
 	workspacePaths, err := util.ReadWorkspacePaths()
-	if nil != err {
+	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
@@ -303,7 +309,7 @@ func setWorkspaceDir(c *gin.Context) {
 	workspacePaths = gulu.Str.RemoveElem(workspacePaths, path)
 	workspacePaths = append(workspacePaths, path) // 切换的工作空间固定放在最后一个
 
-	if err = util.WriteWorkspacePaths(workspacePaths); nil != err {
+	if err = util.WriteWorkspacePaths(workspacePaths); err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return

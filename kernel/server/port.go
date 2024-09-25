@@ -18,7 +18,6 @@ package server
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,7 +38,7 @@ func killRunningKernel() {
 	defer logging.LogInfof("check running kernel elapsed [%dms]", time.Since(now).Milliseconds())
 
 	processes, err := goPS.Processes()
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("get processes failed: %s", err)
 		killByPort(util.FixedPort)
 		return
@@ -65,7 +64,7 @@ func killRunningKernel() {
 }
 
 func killByPort(port string) {
-	if !isPortOpen(port) {
+	if !util.IsPortOpen(port) {
 		return
 	}
 
@@ -87,19 +86,6 @@ func killByPort(port string) {
 	logging.LogInfof("killed process [name=%s, pid=%s]", name, pid)
 }
 
-func isPortOpen(port string) bool {
-	timeout := time.Second
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", port), timeout)
-	if nil != err {
-		return false
-	}
-	if nil != conn {
-		conn.Close()
-		return true
-	}
-	return false
-}
-
 func kill(pid string) {
 	var killCmd *exec.Cmd
 	if gulu.OS.IsWindows() {
@@ -116,7 +102,7 @@ func pidByPort(port string) (ret string) {
 		cmd := exec.Command("cmd", "/c", "netstat -ano | findstr "+port)
 		gulu.CmdAttr(cmd)
 		data, err := cmd.CombinedOutput()
-		if nil != err {
+		if err != nil {
 			logging.LogErrorf("netstat failed: %s", err)
 			return
 		}
@@ -136,7 +122,7 @@ func pidByPort(port string) (ret string) {
 	cmd := exec.Command("lsof", "-Fp", "-i", ":"+port)
 	gulu.CmdAttr(cmd)
 	data, err := cmd.CombinedOutput()
-	if nil != err {
+	if err != nil {
 		logging.LogErrorf("lsof failed: %s", err)
 		return
 	}

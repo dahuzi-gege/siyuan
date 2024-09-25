@@ -87,7 +87,7 @@
     font-weight: bold;
 
     &:empty::after {
-      color: var(--b3-theme-on-surface);
+      color: var(--b3-theme-on-surface-light);
       content: attr(data-tip);
     }
   }
@@ -192,6 +192,10 @@
         white-space: nowrap;
         cursor: pointer;
 
+        &[data-dtype="lineNumber"] {
+          cursor: inherit;
+        }
+
         &:first-child {
           padding-left: 1.625em;
           box-sizing: initial;
@@ -266,8 +270,8 @@
       display: none;
       position: absolute;
       right: 5px;
-      font-size: 85%;
-      top: 5.5px;
+      font-size: 85% !important;
+      top: 7.5px;
     }
 
     .popover__block {
@@ -280,6 +284,10 @@
 
     &[data-wrap="false"] {
       white-space: nowrap;
+    }
+
+    &[data-block-id] > .block__icon[data-type="copy"] {
+      display: none;
     }
 
     &.dragover__right {

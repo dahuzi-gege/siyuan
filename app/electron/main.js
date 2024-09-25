@@ -92,13 +92,16 @@ const hotKey2Electron = (key) => {
     if (key.indexOf("⌘") > -1) {
         electronKey += "CommandOrControl+";
     }
+    if (key.indexOf("⌃") > -1) {
+        electronKey += "Control+";
+    }
     if (key.indexOf("⇧") > -1) {
         electronKey += "Shift+";
     }
     if (key.indexOf("⌥") > -1) {
         electronKey += "Alt+";
     }
-    return electronKey + key.replace("⌘", "").replace("⇧", "").replace("⌥", "");
+    return electronKey + key.replace("⌘", "").replace("⇧", "").replace("⌥", "").replace("⌃", "");
 };
 
 const exitApp = (port, errorWindowId) => {
@@ -236,17 +239,12 @@ const isOpenAsHidden = function () {
 };
 
 const initMainWindow = () => {
-    let windowStateInitialized = true;
     // 恢复主窗体状态
     let oldWindowState = {};
     try {
         oldWindowState = JSON.parse(fs.readFileSync(windowStatePath, "utf8"));
-        if (!oldWindowState.x) {
-            windowStateInitialized = false;
-        }
     } catch (e) {
         fs.writeFileSync(windowStatePath, "{}");
-        windowStateInitialized = false;
     }
     let defaultWidth;
     let defaultHeight;
@@ -268,8 +266,9 @@ const initMainWindow = () => {
         height: defaultHeight,
     }, oldWindowState);
 
-    // writeLog("windowStat [width=" + windowState.width + ", height=" + windowState.height + "], default [width=" + defaultWidth + ", height=" + defaultHeight + "], workArea [width=" + workArea.width + ", height=" + workArea.height + "]");
+    writeLog("windowStat [x=" + windowState.x + ", y=" + windowState.y + ", width=" + windowState.width + ", height=" + windowState.height + "], default [width=" + defaultWidth + ", height=" + defaultHeight + "], workArea [width=" + workArea.width + ", height=" + workArea.height + "]");
 
+    let resetToCenter = false;
     let x = windowState.x;
     let y = windowState.y;
     if (workArea) {
@@ -278,24 +277,21 @@ const initMainWindow = () => {
             windowState.width = Math.min(defaultWidth, workArea.width);
             windowState.height = Math.min(defaultHeight, workArea.height);
         }
-        if (x > workArea.width) {
-            x = 0;
-        }
-        if (y > workArea.height) {
-            y = 0;
+
+        if (x >= workArea.width * 0.8 || y >= workArea.height * 0.8) {
+            resetToCenter = true;
         }
     }
+
+    if (x < 0 || y < 0) {
+        resetToCenter = true;
+    }
+
     if (windowState.width < 493) {
         windowState.width = 493;
     }
     if (windowState.height < 376) {
         windowState.height = 376;
-    }
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 0) {
-        y = 0;
     }
 
     // 创建主窗体
@@ -321,7 +317,7 @@ const initMainWindow = () => {
     });
     remote.enable(currentWindow.webContents);
 
-    windowStateInitialized ? currentWindow.setPosition(x, y) : currentWindow.center();
+    resetToCenter ? currentWindow.center() : currentWindow.setPosition(x, y);
     currentWindow.webContents.userAgent = "SiYuan/" + appVer + " https://b3log.org/siyuan Electron " + currentWindow.webContents.userAgent;
 
     // set proxy
@@ -551,7 +547,7 @@ const initKernel = (workspace, port, lang) => {
                             errorWindowId = showErrorWindow("⚠️ 初始化工作空间失败 Failed to create workspace directory", "<div>初始化工作空间失败。</div><div>Failed to init workspace.</div>");
                             break;
                         case 26:
-                            errorWindowId = showErrorWindow("🚒 已成功避免潜在的数据损坏<br>Successfully avoid potential data corruption", "<div>工作空间下的文件正在被第三方软件（比如同步盘 iCloud/OneDrive/Dropbox/Google Drive/坚果云/百度网盘/腾讯微云等）扫描读取占用，继续使用会导致数据损坏，思源内核已经安全退出。<br><br>请将工作空间移动到其他路径后再打开，停止同步盘同步工作空间。如果以上步骤无法解决问题，请参考<a href=\"https://ld246.com/article/1684586140917\" target=\"_blank\">这里</a>或者<a href=\"https://ld246.com/article/1649901726096\" target=\"_blank\">发帖</a>寻求帮助。</div><hr><div>The files in the workspace are being scanned and read by third-party software (such as sync disk iCloud/OneDrive/Dropbox/Google Drive/Nutstore/Baidu Netdisk/Tencent Weiyun, etc.), continuing to use it will cause data corruption, and the SiYuan kernel is already safe shutdown.<br><br>Move the workspace to another path and open it again, stop the sync disk to sync the workspace. If the above steps do not resolve the issue, please look for help or report bugs <a href=\"https://liuyun.io/article/1686530886208\" target=\"_blank\">here</a>.</div>");
+                            errorWindowId = showErrorWindow("🚒 已成功避免潜在的数据损坏<br>Successfully avoid potential data corruption", "<div>工作空间下的文件正在被第三方软件（比如同步网盘、杀毒软件等）打开占用，继续使用会导致数据损坏，思源内核已经安全退出。<br><br>请将工作空间移动到其他路径后再打开，停止同步盘同步工作空间，并将工作空间加入杀毒软件信任列表。如果以上步骤无法解决问题，请参考<a href=\"https://ld246.com/article/1684586140917\" target=\"_blank\">这里</a>或者<a href=\"https://ld246.com/article/1649901726096\" target=\"_blank\">发帖</a>寻求帮助。</div><hr><div>The files in the workspace are being opened and occupied by third-party software (such as synchronized network disk, antivirus software, etc.), continuing to use it will cause data corruption, and the SiYuan Kernel is already safe shutdown.<br><br>Move the workspace to another path and open it again, stop the network disk to sync the workspace. If the above steps do not resolve the issue, please look for help or report bugs <a href=\"https://liuyun.io/article/1686530886208\" target=\"_blank\">here</a>.</div>");
                             break;
                         case 0:
                             break;

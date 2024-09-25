@@ -10,7 +10,6 @@ import {confirmDialog} from "../../dialog/confirmDialog";
 import {getThemeMode, setInlineStyle} from "../../util/assets";
 import {fetchPost} from "../../util/fetch";
 import {Dialog} from "../../dialog";
-import {pathPosix} from "../../util/pathName";
 import {replaceLocalPath} from "../../editor/rename";
 import {setStorageVal} from "../util/compatibility";
 import {isPaidUser} from "../../util/needSubscribe";
@@ -308,12 +307,14 @@ const renderPDF = async (id: string) => {
             // 强制换行 https://ld246.com/article/1679228783553
             item.parentElement.setAttribute("linewrap", "true");
             item.parentElement.style.width = "";
+            item.parentElement.style.boxSizing = "border-box";
             item.parentElement.style.width = Math.min(item.parentElement.clientWidth, width) + "px";
             item.removeAttribute('data-render');
         })
         Protyle.highlightRender(previewElement, "${servePath}/stage/protyle");
         previewElement.querySelectorAll('[data-type="NodeMathBlock"]').forEach((item) => {
             item.style.width = "";
+            item.style.boxSizing = "border-box";
             item.style.width = Math.min(item.clientWidth, width) + "px";
             item.removeAttribute('data-render');
         })
@@ -558,6 +559,13 @@ const renderPDF = async (id: string) => {
         });
         setPadding();
         renderPreview(response.data);
+        window.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                const {ipcRenderer}  = require("electron");
+                ipcRenderer.send("${Constants.SIYUAN_CMD}", "destroy")
+                event.preventDefault();
+            }
+        })
     });
 </script></body></html>`;
     fetchPost("/api/export/exportTempContent", {content: html}, (response) => {
@@ -617,7 +625,7 @@ const getExportPath = (option: IExportOptions, removeAssets?: boolean, mergeSubd
                         hideMessage(msgId);
                         return;
                     }
-                    afterExport(path.join(savePath, replaceLocalPath(response.data.rootTitle)) + ".docx", msgId);
+                    afterExport(exportResponse.data.path, msgId);
                 } else {
                     onExport(exportResponse, savePath, option, removeAssets, msgId);
                 }
@@ -652,7 +660,8 @@ const onExport = (data: IWebSocketData, filePath: string, exportOption: IExportO
     <link rel="stylesheet" type="text/css" id="baseStyle" href="stage/build/export/base.css?${Constants.SIYUAN_VERSION}"/>
     <link rel="stylesheet" type="text/css" id="themeDefaultStyle" href="appearance/themes/${themeName}/theme.css?${Constants.SIYUAN_VERSION}"/>
     ${themeStyle}
-    <title>${pathPosix().basename(filePath)} - ${window.siyuan.languages.siyuanNote}  v${Constants.SIYUAN_VERSION}</title>
+    <title>${data.data.name}</title>
+    <!-- Exported by SiYuan v${Constants.SIYUAN_VERSION} -->
     <style>
         body {font-family: var(--b3-font-family);background-color: var(--b3-theme-background);color: var(--b3-theme-on-background)}
         ${setInlineStyle(false)}
