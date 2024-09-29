@@ -1,3 +1,14 @@
+## 重要声明
+
+- 仅供学习使用
+- 可以不登录使用 `S3/WebDAV` 同步功能
+- 使用 `root` 用户替代 `siyuan` 用户，用于适配部分NAS（例如：极空间）
+- 将默认语言更改为`中文`
+- 相较于原版的改动点：https://github.com/siyuan-note/siyuan/compare/master...nfe-w:siyuan:dev-nfe-w
+
+[![](https://img.shields.io/badge/DockerHub-dahuziyoung/siyuan-367AC7?style=flat-square&logo=Docker&logoColor=white)](https://hub.docker.com/r/dahuziyoung/siyuan)
+
+
 <p align="center">
 <img alt="SiYuan" src="https://b3log.org/images/brand/siyuan-128.png">
 <br>

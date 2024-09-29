@@ -35,18 +35,30 @@ RUN apk add --no-cache gcc musl-dev && \
     find /opt/siyuan/ -name .git | xargs rm -rf
 
 FROM alpine:latest
-LABEL maintainer="Liang Ding<845765@qq.com>"
+LABEL maintainer="dahuzi<XXXXXXX.com>"
 
 WORKDIR /opt/siyuan/
 COPY --from=GO_BUILD /opt/siyuan/ /opt/siyuan/
 
+RUN apk add --no-cache ca-certificates tzdata
+=======
+
 RUN apk add --no-cache ca-certificates tzdata su-exec && \
     chmod +x /opt/siyuan/entrypoint.sh
+
 
 ENV TZ=Asia/Shanghai
 ENV HOME=/home/siyuan
 ENV RUN_IN_CONTAINER=true
+ENV LANG=zh_CN.UTF-8
+ENV LC_ALL=zh_CN.UTF-8
 EXPOSE 6806
+VOLUME /siyuan/workspace
 
+
+ENTRYPOINT ["/opt/siyuan/kernel"]
+CMD ["--workspace=/siyuan/workspace", "--accessAuthCode=password"]
+=======
 ENTRYPOINT ["/opt/siyuan/entrypoint.sh"]
 CMD ["/opt/siyuan/kernel"]
+
