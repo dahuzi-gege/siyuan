@@ -40,9 +40,6 @@ LABEL maintainer="dahuzi<XXXXXXX.com>"
 WORKDIR /opt/siyuan/
 COPY --from=GO_BUILD /opt/siyuan/ /opt/siyuan/
 
-RUN apk add --no-cache ca-certificates tzdata
-=======
-
 RUN apk add --no-cache ca-certificates tzdata su-exec && \
     chmod +x /opt/siyuan/entrypoint.sh
 
